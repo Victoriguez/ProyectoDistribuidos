@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  scraper:
+    build: ./scraper
+    volumes:
+      - ./scraper:/app
+    depends_on:
+      - storage
+
+  storage:
+    build: ./storage
+    volumes:
+      - ./storage:/app
+
+  traffic_generator:
+    build: ./traffic_generator
+    volumes:
+      - ./traffic_generator:/app
+    depends_on:
+      - storage
+      - cache
+
+  cache:
+    build: ./cache
+    volumes:
+      - ./cache:/app
