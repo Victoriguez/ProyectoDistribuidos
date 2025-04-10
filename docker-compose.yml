@@ -4,23 +4,22 @@ services:
     build: ./scraper
     volumes:
       - ./scraper:/app
-    depends_on:
-      - storage
+    command: ["sleep", "infinity"]
 
   storage:
     build: ./storage
     volumes:
       - ./storage:/app
+    command: ["sleep", "infinity"]
 
   traffic_generator:
     build: ./traffic_generator
     volumes:
       - ./traffic_generator:/app
-    depends_on:
-      - storage
-      - cache
+    command: ["sleep", "infinity"]
 
   cache:
     build: ./cache
     volumes:
       - ./cache:/app
+    command: ["sleep", "infinity"]
