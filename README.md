@@ -1,70 +1,101 @@
 
-# ProyectoDistribuidos – Análisis de Tráfico en la RM (Entrega 1)
+# ProyectoDistribuidos — Sistemas Distribuidos 2025-1
 
-Este proyecto forma parte de la entrega 1 del curso de Sistemas Distribuidos. Consiste en un sistema modular distribuido para recolectar, almacenar y analizar eventos de tráfico desde Waze Live Map.
+Este proyecto corresponde a la Entrega 1 del curso de Sistemas Distribuidos. Implementa un sistema distribuido modular capaz de extraer, almacenar, simular y cachear eventos de tráfico desde Waze Live Map para la Región Metropolitana de Chile.
 
-## 🧱 Estructura del Proyecto
+---
 
-El proyecto está compuesto por los siguientes módulos (cada uno en su propia carpeta):
+## 🧑‍💻 Integrantes
 
-- `scraper/` — se encarga de extraer eventos del mapa de Waze.
-- `storage/` — responsable de almacenar los eventos obtenidos.
-- `traffic_generator/` — simula tráfico de consultas al sistema.
-- `cache/` — sistema de cache que mejora el rendimiento del acceso a eventos.
+- Sebastián [@Sej0taGrove]
+- Víctor [@victoriguez]
 
-Todos los módulos están orquestados usando Docker Compose.
+---
 
-## 📦 Requisitos
+## 📦 Estructura del proyecto
 
-Antes de comenzar, asegúrate de tener instalado:
+El proyecto está organizado en 4 módulos principales, cada uno desplegado como un contenedor independiente usando Docker:
 
-- Git
-- Docker
-- Docker Compose (viene con Docker Desktop)
-- Visual Studio Code (opcional, recomendado)
-
-## ⚙️ Instrucciones para correr el proyecto
-
-1. Abre una terminal y navega a la carpeta donde quieres guardar el proyecto. Por ejemplo:
-
-```bash
-cd Desktop
-mkdir ProyectoUDP
-cd ProyectoUDP
+```
+ProyectoDistribuidos/
+├── scraper/             # Módulo de scraping (obtiene eventos desde Waze)
+├── storage/             # Módulo de almacenamiento (MongoDB)
+├── traffic_generator/   # (próximamente) Generador de consultas sintéticas
+├── cache/               # (próximamente) Sistema de cache para respuestas repetidas
+└── docker-compose.yml   # Orquestador de todos los servicios
 ```
 
-2. Clona el repositorio:
+---
+
+## ✅ Estado actual
+
+✔️ Módulo scraper implementado:  
+- Consulta periódicamente la API pública de Waze Live Map.
+- Descarga eventos tipo "users" desde la Región Metropolitana.
+- Guarda directamente en MongoDB sin archivos intermedios.
+
+✔️ Módulo storage implementado:  
+- Usa MongoDB 6.0 como base de datos.
+- Recibe los datos desde scraper a través de PyMongo.
+- Persistencia con volumen Docker.
+- Colección: eventos (en la base de datos waze_db)
+
+⏳ Módulos traffic_generator y cache están planificados y en desarrollo.
+
+---
+
+## 🚀 Cómo ejecutar el proyecto
+
+Asegurate de tener Docker y Docker Compose instalados.
+
+1. Cloná el repositorio:
 
 ```bash
 git clone https://github.com/victoriguez/ProyectoDistribuidos.git
 cd ProyectoDistribuidos
 ```
 
-3. Levanta los contenedores del sistema:
+2. Levantá los servicios (scraper + MongoDB):
 
 ```bash
 docker compose up --build
 ```
 
-4. Verifica que los servicios están activos:
+Esto iniciará:
+- MongoDB como servicio storage
+- El scraper que consultará Waze cada 5 segundos e insertará datos en la base
+
+3. Verificá que los datos se estén guardando:
+
+En otra terminal:
 
 ```bash
-docker ps
+docker exec -it mongo-storage mongosh
 ```
 
-Deberías ver los servicios: scraper, storage, traffic_generator y cache.
+Dentro del cliente de Mongo:
 
-## 🧪 Estado actual de la entrega
+```js
+use waze_db
+db.eventos.countDocuments()
+```
 
-- [x] Estructura inicial del proyecto
-- [x] Docker Compose funcional
-- [ ] Módulo scraper implementado
-- [ ] Almacenamiento persistente
-- [ ] Simulación de tráfico
-- [ ] Sistema de cache con políticas de reemplazo
-- [ ] Métricas y análisis
+Deberías ver un número creciente de documentos (eventos tipo “users”).
 
-## 👥 Integrantes del grupo
+---
 
-- Víctor Iguez
-- Sebastián (tu apellido aquí)
+## 📌 Tecnologías utilizadas
+
+- Python 3.10 (scraper)
+- requests + pymongo
+- MongoDB 6.0
+- Docker y Docker Compose
+
+---
+
+## 🛠 Próximas tareas
+
+- Implementar generador de tráfico (Poisson + Uniforme)
+- Implementar sistema de cache (LRU, FIFO)
+- Medición de métricas de eficiencia
+- Documentar decisiones de diseño
