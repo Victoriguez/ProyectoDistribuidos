@@ -1,25 +1,20 @@
 version: '3.8'
 services:
-  scraper:
-    build: ./scraper
-    volumes:
-      - ./scraper:/app
-    command: ["sleep", "infinity"]
-
   storage:
     build: ./storage
+    container_name: mongo-storage
+    ports:
+      - "27017:27017"
     volumes:
-      - ./storage:/app
-    command: ["sleep", "infinity"]
+      - mongo_data:/data/db
 
-  traffic_generator:
-    build: ./traffic_generator
+  scraper:
+    build: ./scraper
+    depends_on:
+      - storage
+    container_name: scraper
     volumes:
-      - ./traffic_generator:/app
-    command: ["sleep", "infinity"]
+      - ./scraper:/app
 
-  cache:
-    build: ./cache
-    volumes:
-      - ./cache:/app
-    command: ["sleep", "infinity"]
+volumes:
+  mongo_data:
