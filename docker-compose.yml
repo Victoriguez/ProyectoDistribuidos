@@ -8,6 +8,7 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+
   scraper:
     build: ./scraper
     depends_on:
@@ -15,6 +16,7 @@ services:
     container_name: scraper
     volumes:
       - ./scraper:/app
+
   cleaner:
     build: ./storage
     container_name: cleaner
