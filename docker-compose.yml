@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   storage:
-    build: ./storage
+    image: mongo:6.0
     container_name: mongo-storage
     ports:
       - "27017:27017"
@@ -11,11 +9,23 @@ services:
 
   scraper:
     build: ./scraper
+    container_name: scraper
     depends_on:
       - storage
-    container_name: scraper
     volumes:
       - ./scraper:/app
+
+  traffic_generator:
+    build: ./traffic_generator
+    container_name: traffic-generator
+    depends_on:
+      - storage
+
+  cache:
+    build: ./cache
+    container_name: cache
+    depends_on:
+      - traffic_generator
 
   cleaner:
     build: ./storage
@@ -23,20 +33,6 @@ services:
     depends_on:
       - storage
     command: python cleaner.py
-
-  cache:
-    build: ./cache
-    depends_on:
-      - storage
-    container_name: cache
-    ports:
-      - "5001:5001"
-
-  traffic_generator:
-    build: ./traffic_generator
-    depends_on:
-      - cache
-    container_name: traffic_generator
 
 volumes:
   mongo_data:

@@ -1,4 +1,3 @@
-FROM mongo:6.0
 FROM python:3.10-slim
 
 WORKDIR /app
