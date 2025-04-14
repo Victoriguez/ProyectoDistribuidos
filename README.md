@@ -1,79 +1,85 @@
-# Proyecto Sistemas Distribuidos — UDP 2025
+# Proyecto Distribuidos - Análisis de Tráfico Waze
 
-Este proyecto implementa una arquitectura distribuida para la recolección, almacenamiento, análisis y cache de datos de tráfico utilizando información pública de Waze. Cumple con los requisitos solicitados en la entrega 1 del curso.
+## Descripción general
 
-## 📦 Estructura de Módulos
+Este sistema distribuido simula un flujo completo de procesamiento de datos de tráfico obtenidos desde Waze. Se compone de cuatro módulos principales:
+1. Scraper: extrae datos automáticamente desde el Live Map de Waze (API indirecta).
+2. Almacenamiento: almacena los datos en MongoDB.
+3. Traffic Generator: genera tráfico de consultas sobre los datos siguiendo distribuciones probabilísticas.
+4. Cache: optimiza el acceso a datos repetidos utilizando políticas de reemplazo como LRU o FIFO.
 
-- `scraper/` — Extrae datos de tráfico desde la API de Waze y los guarda en MongoDB.
-- `storage/` — Servicio basado en MongoDB para almacenar los eventos.
-- `cache/` — Cache HTTP que entrega eventos bajo dos políticas (LRU o FIFO) y guarda métricas.
-- `traffic_generator/` — Genera tráfico de consultas simuladas con distribuciones configurables.
+Además, se incluye un módulo auxiliar de limpieza (cleaner) que verifica y normaliza los datos en la base.
 
-## 🚀 Cómo ejecutar
+## Estructura del proyecto
 
-Desde la raíz del proyecto:
+```
+ProyectoDistribuidos/
+├── docker-compose.yml
+├── scraper/
+│   └── scraper.py
+├── storage/
+│   ├── cleaner.py
+│   ├── Dockerfile
+│   └── requirements.txt
+├── traffic_generator/
+│   └── generator.py
+├── cache/
+│   └── cache_server.py
+```
 
-1. Construir los contenedores:
+## Requisitos
+
+- Docker & Docker Compose
+- Python 3.10+ (solo para desarrollo local)
+
+## Instrucciones de uso
+
+1. Clona el repositorio y entra a la carpeta del proyecto.
+2. Ejecuta:
 
 ```bash
 docker compose build
-```
-
-2. Levantar todos los servicios:
-
-```bash
 docker compose up
 ```
 
-Los siguientes servicios estarán disponibles:
+3. Esto levantará:
+- MongoDB en storage
+- El microservicio cache en :5001
+- El traffic generator consultando a cache
+- El scraper obteniendo datos periódicamente
 
-- Cache: http://localhost:5001
-- MongoDB: puerto 27017
+Para limpiar la base de datos manualmente:
 
-## 🔁 Generador de Tráfico
-
-Configura el generador en `traffic_generator.py`:
-
-```python
-ESTRATEGIA = "poisson"  # o "uniforme"
-LAM = 0.5  # tasa promedio (λ)
+```bash
+docker compose up cleaner
 ```
 
-El generador consulta eventos simulados al cache cada cierto tiempo, modelando distintas distribuciones de llegada.
+## Verificación del funcionamiento
 
-## 🔐 Cache de Eventos
+- La base de datos se puede consultar usando:
 
-El servicio cache implementa:
-
-- Políticas: LRU y FIFO (editables en `cache_server.py`)
-- Capacidad máxima: 100 eventos (editable)
-- Conexión a MongoDB para cache misses
-
-📊 Endpoint de métricas:
-
-Consulta en cualquier momento:
-
-```
-GET http://localhost:5001/stats
+```bash
+docker exec -it mongo-storage mongosh
+use waze_db
+db.eventos.countDocuments()
 ```
 
-Respuesta ejemplo:
+- Para ver estadísticas del cache:
 
-```json
-{
-  "cache_hits": 12,
-  "cache_misses": 8,
-  "cache_size": 8
-}
+```bash
+curl http://localhost:5001/stats
 ```
 
-## 🧪 Pendientes para pruebas
+## Justificación de diseño
 
-- Ejecutar múltiples generadores de tráfico con diferentes tasas
-- Comparar eficiencia de políticas FIFO vs LRU
-- Evaluar escalabilidad del cache y storage
+- MongoDB fue elegido por su flexibilidad en esquemas y soporte para grandes volúmenes de datos.
+- El sistema fue modularizado para facilitar pruebas, escalabilidad y mantenimiento.
+- Se utilizaron contenedores Docker para garantizar portabilidad.
+- Cache fue implementado como microservicio independiente para probar diferentes políticas de reemplazo.
 
-## 👨‍💻 Autores
+## Consideraciones
 
-- Sebastián — Módulos: Traffic Generator, Cache, Integración, Scraper
-- Víctor — Módulo: Storage, Optimizaciones, Integración con base de datos
+- El cleaner es parte del módulo de almacenamiento.
+- El tráfico simulado se basa en distribución Poisson, con opción a cambiarla fácilmente.
+- Todos los módulos son intercambiables o ampliables.
+- Se alcanzó el objetivo de 10.000 eventos.
