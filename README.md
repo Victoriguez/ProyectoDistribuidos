@@ -1,101 +1,79 @@
+# Proyecto Sistemas Distribuidos — UDP 2025
 
-# ProyectoDistribuidos — Sistemas Distribuidos 2025-1
+Este proyecto implementa una arquitectura distribuida para la recolección, almacenamiento, análisis y cache de datos de tráfico utilizando información pública de Waze. Cumple con los requisitos solicitados en la entrega 1 del curso.
 
-Este proyecto corresponde a la Entrega 1 del curso de Sistemas Distribuidos. Implementa un sistema distribuido modular capaz de extraer, almacenar, simular y cachear eventos de tráfico desde Waze Live Map para la Región Metropolitana de Chile.
+## 📦 Estructura de Módulos
 
----
+- `scraper/` — Extrae datos de tráfico desde la API de Waze y los guarda en MongoDB.
+- `storage/` — Servicio basado en MongoDB para almacenar los eventos.
+- `cache/` — Cache HTTP que entrega eventos bajo dos políticas (LRU o FIFO) y guarda métricas.
+- `traffic_generator/` — Genera tráfico de consultas simuladas con distribuciones configurables.
 
-## 🧑‍💻 Integrantes
+## 🚀 Cómo ejecutar
 
-- Sebastián [@Sej0taGrove]
-- Víctor [@victoriguez]
+Desde la raíz del proyecto:
 
----
-
-## 📦 Estructura del proyecto
-
-El proyecto está organizado en 4 módulos principales, cada uno desplegado como un contenedor independiente usando Docker:
-
-```
-ProyectoDistribuidos/
-├── scraper/             # Módulo de scraping (obtiene eventos desde Waze)
-├── storage/             # Módulo de almacenamiento (MongoDB)
-├── traffic_generator/   # (próximamente) Generador de consultas sintéticas
-├── cache/               # (próximamente) Sistema de cache para respuestas repetidas
-└── docker-compose.yml   # Orquestador de todos los servicios
-```
-
----
-
-## ✅ Estado actual
-
-✔️ Módulo scraper implementado:  
-- Consulta periódicamente la API pública de Waze Live Map.
-- Descarga eventos tipo "users" desde la Región Metropolitana.
-- Guarda directamente en MongoDB sin archivos intermedios.
-
-✔️ Módulo storage implementado:  
-- Usa MongoDB 6.0 como base de datos.
-- Recibe los datos desde scraper a través de PyMongo.
-- Persistencia con volumen Docker.
-- Colección: eventos (en la base de datos waze_db)
-
-⏳ Módulos traffic_generator y cache están planificados y en desarrollo.
-
----
-
-## 🚀 Cómo ejecutar el proyecto
-
-Asegurate de tener Docker y Docker Compose instalados.
-
-1. Cloná el repositorio:
+1. Construir los contenedores:
 
 ```bash
-git clone https://github.com/victoriguez/ProyectoDistribuidos.git
-cd ProyectoDistribuidos
+docker compose build
 ```
 
-2. Levantá los servicios (scraper + MongoDB):
+2. Levantar todos los servicios:
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
-Esto iniciará:
-- MongoDB como servicio storage
-- El scraper que consultará Waze cada 5 segundos e insertará datos en la base
+Los siguientes servicios estarán disponibles:
 
-3. Verificá que los datos se estén guardando:
+- Cache: http://localhost:5001
+- MongoDB: puerto 27017
 
-En otra terminal:
+## 🔁 Generador de Tráfico
 
-```bash
-docker exec -it mongo-storage mongosh
+Configura el generador en `traffic_generator.py`:
+
+```python
+ESTRATEGIA = "poisson"  # o "uniforme"
+LAM = 0.5  # tasa promedio (λ)
 ```
 
-Dentro del cliente de Mongo:
+El generador consulta eventos simulados al cache cada cierto tiempo, modelando distintas distribuciones de llegada.
 
-```js
-use waze_db
-db.eventos.countDocuments()
+## 🔐 Cache de Eventos
+
+El servicio cache implementa:
+
+- Políticas: LRU y FIFO (editables en `cache_server.py`)
+- Capacidad máxima: 100 eventos (editable)
+- Conexión a MongoDB para cache misses
+
+📊 Endpoint de métricas:
+
+Consulta en cualquier momento:
+
+```
+GET http://localhost:5001/stats
 ```
 
-Deberías ver un número creciente de documentos (eventos tipo “users”).
+Respuesta ejemplo:
 
----
+```json
+{
+  "cache_hits": 12,
+  "cache_misses": 8,
+  "cache_size": 8
+}
+```
 
-## 📌 Tecnologías utilizadas
+## 🧪 Pendientes para pruebas
 
-- Python 3.10 (scraper)
-- requests + pymongo
-- MongoDB 6.0
-- Docker y Docker Compose
+- Ejecutar múltiples generadores de tráfico con diferentes tasas
+- Comparar eficiencia de políticas FIFO vs LRU
+- Evaluar escalabilidad del cache y storage
 
----
+## 👨‍💻 Autores
 
-## 🛠 Próximas tareas
-
-- Implementar generador de tráfico (Poisson + Uniforme)
-- Implementar sistema de cache (LRU, FIFO)
-- Medición de métricas de eficiencia
-- Documentar decisiones de diseño
+- Sebastián — Módulos: Traffic Generator, Cache, Integración, Scraper
+- Víctor — Módulo: Storage, Optimizaciones, Integración con base de datos
