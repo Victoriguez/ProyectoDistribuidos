@@ -15,7 +15,7 @@ def esperar_mongo(client, intentos=10, intervalo=3):
             time.sleep(intervalo)
     raise Exception("❌ No se pudo conectar a Mongo luego de varios intentos.")
 
-client = MongoClient("mongodb://storage:27017")
+client = MongoClient("mongodb://mongo-storage:27017")
 esperar_mongo(client)
 db = client["waze_db"]
 coleccion = db["eventos"]

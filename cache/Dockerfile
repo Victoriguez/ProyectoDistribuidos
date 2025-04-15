@@ -6,5 +6,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY cache_server.py .
+COPY cache_logic.py .
 
 CMD ["python", "cache_server.py"]

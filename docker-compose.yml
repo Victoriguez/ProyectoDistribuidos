@@ -1,3 +1,4 @@
+version: '3.8'
 services:
   storage:
     image: mongo:6.0
@@ -7,6 +8,27 @@ services:
     volumes:
       - mongo_data:/data/db
 
+  cache:
+    build: ./cache
+    container_name: cache
+    depends_on:
+      - storage
+    ports:
+      - "5001:5001"
+    environment:
+      - CACHE_SIZE=1
+      - POLICY=LRU
+
+  traffic_generator:
+    build: ./traffic_generator
+    container_name: traffic_generator
+    depends_on:
+      - cache
+    environment:
+      - MODE=empirical        # Cambiar a "poisson", "uniform", etc. según se necesite
+      - RATE=2.0
+    
+
   scraper:
     build: ./scraper
     container_name: scraper
@@ -14,18 +36,6 @@ services:
       - storage
     volumes:
       - ./scraper:/app
-
-  traffic_generator:
-    build: ./traffic_generator
-    container_name: traffic-generator
-    depends_on:
-      - storage
-
-  cache:
-    build: ./cache
-    container_name: cache
-    depends_on:
-      - traffic_generator
 
   cleaner:
     build: ./storage
