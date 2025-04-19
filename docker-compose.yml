@@ -7,33 +7,45 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   cache:
     build: ./cache
     container_name: cache
     depends_on:
-      - storage
+      storage:
+        condition: service_healthy
     ports:
       - "5001:5001"
     environment:
-      - CACHE_SIZE=1
+      - CACHE_SIZE=8
       - POLICY=LRU
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/metrics"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
 
   traffic_generator:
     build: ./traffic_generator
     container_name: traffic_generator
     depends_on:
-      - cache
+      cache:
+        condition: service_healthy
     environment:
       - MODE=empirical        # Cambiar a "poisson", "uniform", etc. según se necesite
       - RATE=2.0
-    
 
   scraper:
     build: ./scraper
     container_name: scraper
     depends_on:
-      - storage
+      storage:
+        condition: service_healthy
     volumes:
       - ./scraper:/app
 
@@ -41,7 +53,8 @@ services:
     build: ./storage
     container_name: cleaner
     depends_on:
-      - storage
+      storage:
+        condition: service_healthy
     command: python cleaner.py
 
 volumes:
