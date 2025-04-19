@@ -1,85 +1,122 @@
-# Proyecto Distribuidos - Análisis de Tráfico Waze
+# Proyecto de Sistemas Distribuidos - Entrega 1
 
-## Descripción general
+## Descripción General
 
-Este sistema distribuido simula un flujo completo de procesamiento de datos de tráfico obtenidos desde Waze. Se compone de cuatro módulos principales:
-1. Scraper: extrae datos automáticamente desde el Live Map de Waze (API indirecta).
-2. Almacenamiento: almacena los datos en MongoDB.
-3. Traffic Generator: genera tráfico de consultas sobre los datos siguiendo distribuciones probabilísticas.
-4. Cache: optimiza el acceso a datos repetidos utilizando políticas de reemplazo como LRU o FIFO.
+Este proyecto tiene como objetivo la construcción de un sistema distribuido que recolecta, almacena y analiza eventos de tráfico en tiempo real extraídos desde Waze. Se compone de 4 módulos principales que se comunican de forma secuencial: 
 
-Además, se incluye un módulo auxiliar de limpieza (cleaner) que verifica y normaliza los datos en la base.
+1. Scraper
+2. Almacenamiento (MongoDB)
+3. Generador de Tráfico
+4. Sistema de Caché
 
-## Estructura del proyecto
+---
+
+## 1. Scraper
+
+El scraper se conecta a la API de Waze Live Map para extraer información geoespacial de usuarios y eventos en la Región Metropolitana de Santiago, Chile.
+
+- Extrae datos cada 5 segundos.
+- Guarda los eventos en MongoDB.
+- Objetivo: alcanzar 10.000 eventos.
+
+### Endpoint consultado
 
 ```
-ProyectoDistribuidos/
-├── docker-compose.yml
-├── scraper/
-│   └── scraper.py
-├── storage/
-│   ├── cleaner.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── traffic_generator/
-│   └── generator.py
-├── cache/
-│   └── cache_server.py
+https://www.waze.com/live-map/api/georss?top=-33.3&bottom=-33.7&left=-70.9&right=-70.5&env=row&types=alerts,traffic,users
 ```
 
-## Requisitos
+---
 
-- Docker & Docker Compose
-- Python 3.10+ (solo para desarrollo local)
+## 2. Almacenamiento (MongoDB)
 
-## Instrucciones de uso
+Se utiliza MongoDB por su alta velocidad de escritura y flexibilidad con documentos JSON.
 
-1. Clona el repositorio y entra a la carpeta del proyecto.
-2. Ejecuta:
+- Se aloja en un contenedor llamado `mongo-storage`.
+- Base de datos: `waze_db`
+- Colección: `eventos`
+- Se incluye un módulo `cleaner.py` que elimina eventos inválidos o corrige el campo `timestamp`.
+
+---
+
+## 3. Generador de Tráfico
+
+Este módulo simula tráfico de consultas de eventos, representando cómo distintos usuarios acceden a los datos.
+
+### Modos de distribución soportados:
+
+- `poisson`: usa numpy para generar tasas de arribo según una distribución de Poisson.
+- `uniform`: genera una consulta cada segundo a un user_id aleatorio.
+- `empirical`: basada en la distribución real observada de user_ids desde MongoDB.
+
+Las consultas se hacen al módulo de caché.
+
+---
+
+## 4. Sistema de Caché
+
+Un servidor Flask que:
+
+- Expone un endpoint: `GET /evento/<user_id>`
+- Almacena respuestas en memoria.
+- Implementa políticas de reemplazo:
+  - LRU (Least Recently Used)
+  - FIFO (First In First Out)
+- Configurable por variables de entorno:
+  - `CACHE_POLICY`
+  - `CACHE_SIZE`
+
+---
+
+## Uso con Docker
+
+### 1. Construir y levantar los servicios
 
 ```bash
-docker compose build
-docker compose up
+docker compose up --build
 ```
 
-3. Esto levantará:
-- MongoDB en storage
-- El microservicio cache en :5001
-- El traffic generator consultando a cache
-- El scraper obteniendo datos periódicamente
-
-Para limpiar la base de datos manualmente:
-
-```bash
-docker compose up cleaner
-```
-
-## Verificación del funcionamiento
-
-- La base de datos se puede consultar usando:
+### 2. Consultar estado de Mongo
 
 ```bash
 docker exec -it mongo-storage mongosh
-use waze_db
-db.eventos.countDocuments()
 ```
 
-- Para ver estadísticas del cache:
+### 3. Ver logs del generador de tráfico
+
+```bash
+docker logs traffic_generator
+```
+
+---
+
+## Métricas del Caché
+
+Disponible en:
 
 ```bash
 curl http://localhost:5001/stats
 ```
 
-## Justificación de diseño
+Ejemplo de salida:
 
-- MongoDB fue elegido por su flexibilidad en esquemas y soporte para grandes volúmenes de datos.
-- El sistema fue modularizado para facilitar pruebas, escalabilidad y mantenimiento.
-- Se utilizaron contenedores Docker para garantizar portabilidad.
-- Cache fue implementado como microservicio independiente para probar diferentes políticas de reemplazo.
+```json
+{
+  "cache_hits": 12,
+  "cache_misses": 8,
+  "cache_tamaño": 8
+}
+```
+
+---
 
 ## Consideraciones
 
-- El cleaner es parte del módulo de almacenamiento.
-- El tráfico simulado se basa en distribución Poisson, con opción a cambiarla fácilmente.
-- Todos los módulos son intercambiables o ampliables.
-- Se alcanzó el objetivo de 10.000 eventos.
+- Se recomienda ejecutar el módulo `cleaner` después de acumular los eventos.
+- El sistema está preparado para escalabilidad y portabilidad gracias a Docker.
+- La distribución empírica ofrece un modelo más realista, basado en datos reales del scraping.
+
+---
+
+## Repositorio
+
+📎 Incluir aquí el link a GitHub cuando esté disponible.
