@@ -94,7 +94,7 @@ docker logs traffic_generator
 Disponible en:
 
 ```bash
-curl http://localhost:5001/stats
+curl http://localhost:5001/metrics
 ```
 
 Ejemplo de salida:
