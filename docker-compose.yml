@@ -36,8 +36,8 @@ services:
 
   pig_processor:
     build:
-      context: ./entrega2/pig_processing 
-      dockerfile: Dockerfile 
+      context: ./entrega2/pig_processing  # El contexto es la carpeta que contiene Dockerfile.pig
+      dockerfile: Dockerfile.pig          # <--- CAMBIO AQUÍ: Nombre correcto del Dockerfile
     container_name: pig_service_container
     volumes:
       - ./entrega2/pig_processing/scripts:/pig_scripts

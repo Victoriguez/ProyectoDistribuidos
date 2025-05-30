@@ -1,5 +1,5 @@
 # Dockerfile para Apache Pig
-# Guardar como ProyectoDistribuidos/entrega2/pig_processing/Dockerfile
+# Guardar como ProyectoDistribuidos/entrega2/pig_processing/Dockerfile.pig
 
 FROM openjdk:11-jre-slim
 
@@ -27,11 +27,11 @@ RUN mkdir -p /opt/pig && \
 RUN mkdir -p $PIG_HOME/lib && \
     echo "Descargando mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar..." && \
     wget -O $PIG_HOME/lib/mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar \
-         "http://repo1.maven.org/maven2/org/mongodb/mongo-hadoop/mongo-hadoop-core/${MONGO_HADOOP_CONNECTOR_VERSION}/mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar" && \
+         "https://repo1.maven.org/maven2/org/mongodb/mongo-hadoop/mongo-hadoop-core/${MONGO_HADOOP_CONNECTOR_VERSION}/mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar" && \
     echo "mongo-hadoop-core descargado." && \
     echo "Descargando mongo-hadoop-pig-${MONGO_HADOOP_CONNECTOR_VERSION}.jar..." && \
     wget -O $PIG_HOME/lib/mongo-hadoop-pig-${MONGO_HADOOP_CONNECTOR_VERSION}.jar \
-         "http://repo1.maven.org/maven2/org/mongodb/mongo-hadoop/mongo-hadoop-pig/${MONGO_HADOOP_CONNECTOR_VERSION}/mongo-hadoop-pig-${MONGO_HADOOP_CONNECTOR_VERSION}.jar" && \
+         "https://repo1.maven.org/maven2/org/mongodb/mongo-hadoop/mongo-hadoop-pig/${MONGO_HADOOP_CONNECTOR_VERSION}/mongo-hadoop-pig-${MONGO_HADOOP_CONNECTOR_VERSION}.jar" && \
     echo "mongo-hadoop-pig descargado." && \
     echo "JARs de MongoDB Hadoop Connector descargados en $PIG_HOME/lib/"
 
