@@ -15,9 +15,9 @@ def esperar_cache(url, intentos=10, intervalo=3):
                 print("✅ Caché está listo.")
                 return
         except requests.exceptions.ConnectionError:
-            print(f"⏳ Esperando al caché... intento {i+1}/{intentos}")
+            print(f"Esperando al caché... intento {i+1}/{intentos}")
             time.sleep(intervalo)
-    raise Exception("❌ No se pudo conectar al caché después de varios intentos.")
+    raise Exception("No se pudo conectar al caché después de varios intentos.")
 
 def get_all_user_ids():
     """
@@ -27,7 +27,7 @@ def get_all_user_ids():
     db = client["waze_db"]
     eventos = db["eventos"]
     user_ids = eventos.distinct("id")
-    print(f"🔢 Total de user_id únicos obtenidos: {len(user_ids)}")
+    print(f"Total de user_id únicos obtenidos: {len(user_ids)}")
     return user_ids
 
 def get_user_id_distribution_empirical():
@@ -41,7 +41,7 @@ def get_user_id_distribution_empirical():
     freq_data = list(eventos.aggregate(pipeline))
     user_ids = [item["_id"] for item in freq_data]
     weights = [item["count"] for item in freq_data]
-    print(f"📊 Distribución empírica obtenida: {len(user_ids)} IDs únicos.")
+    print(f"Distribución empírica obtenida: {len(user_ids)} IDs únicos.")
     return user_ids, weights
 
 def traffic_generator(mode="poisson", rate=1.0):
@@ -49,14 +49,14 @@ def traffic_generator(mode="poisson", rate=1.0):
     Generador de tráfico que consulta eventos al caché usando diferentes distribuciones.
     """
     if mode == "empirical":
-        print("📊 Usando distribución empírica basada en frecuencia real...")
+        print("Usando distribución empírica basada en frecuencia real...")
         user_ids, weights = get_user_id_distribution_empirical()
     else:
         user_ids = get_all_user_ids()
         weights = None
 
     if not user_ids:
-        print("❌ No se encontraron user_ids en la base de datos. Verifica el scraper.")
+        print("No se encontraron user_ids en la base de datos. Verifica el scraper.")
         return
 
     print(f"🚦 Iniciando generador de tráfico en modo: {mode}")
@@ -73,24 +73,24 @@ def traffic_generator(mode="poisson", rate=1.0):
                 delay = 1
                 uid = random.choices(user_ids, weights=weights, k=1)[0]
             else:
-                print("❌ Modo inválido. Usa 'poisson', 'uniform' o 'empirical'.")
+                print("Modo inválido. Usa 'poisson', 'uniform' o 'empirical'.")
                 break
 
-            print(f"📤 Consultando evento con user_id: {uid} usando distribución: {mode}")
+            print(f"Consultando evento con user_id: {uid} usando distribución: {mode}")
             r = requests.get(f"http://cache:5001/evento/{uid}")
             if r.status_code == 200:
-                print(f"✅ Respuesta: {r.status_code} | Evento encontrado: {uid}")
+                print(f"Respuesta: {r.status_code} | Evento encontrado: {uid}")
             elif r.status_code == 404:
-                print(f"❌ Evento no encontrado en la base de datos: {uid}")
+                print(f"Evento no encontrado en la base de datos: {uid}")
             else:
-                print(f"⚠️ Respuesta inesperada: {r.status_code}")
+                print(f"Respuesta inesperada: {r.status_code}")
 
             time.sleep(max(delay, 1))
         except KeyboardInterrupt:
-            print("🛑 Generador de tráfico detenido por el usuario.")
+            print("Generador de tráfico detenido por el usuario.")
             break
         except Exception as e:
-            print(f"⚠️ Error en el generador de tráfico: {e}")
+            print(f"Error en el generador de tráfico: {e}")
             time.sleep(2)
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
-version: '3.8'
+version: '3.8' # Puedes quitar esta línea
+
 services:
-  storage:
+  storage: 
     image: mongo:6.0
     container_name: mongo-storage
     ports:
@@ -12,50 +13,46 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  cache:
-    build: ./cache
-    container_name: cache
-    depends_on:
-      storage:
-        condition: service_healthy
-    ports:
-      - "5001:5001"
-    environment:
-      - CACHE_SIZE=8
-      - POLICY=LRU
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/metrics"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-
-  traffic_generator:
-    build: ./traffic_generator
-    container_name: traffic_generator
-    depends_on:
-      cache:
-        condition: service_healthy
-    environment:
-      - MODE=empirical        # Cambiar a "poisson", "uniform", etc. según se necesite
-      - RATE=2.0
+    networks:
+      - distribuidos_network
 
   scraper:
     build: ./scraper
-    container_name: scraper
+    container_name: scraper 
     depends_on:
       storage:
         condition: service_healthy
+    environment: 
+      - MONGO_HOST=storage 
+      - MONGO_PORT=27017
+      - DB_NAME_SCRAPER=waze_db
+      - COLLECTION_NAME_SCRAPER=eventos
+      - SCRAPE_INTERVAL_SECONDS=300 
+      - MAX_EVENTS_TO_COLLECT=250
     volumes:
       - ./scraper:/app
+    networks:
+      - distribuidos_network
 
-  cleaner:
-    build: ./storage
-    container_name: cleaner
-    depends_on:
-      storage:
-        condition: service_healthy
-    command: python cleaner.py
+  pig_processor:
+    build:
+      context: ./entrega2/pig_processing 
+      dockerfile: Dockerfile 
+    container_name: pig_service_container
+    volumes:
+      - ./entrega2/pig_processing/scripts:/pig_scripts
+      - ./entrega2/pig_processing/data_input:/pig_input_data
+      - ./entrega2/pig_processing/data_output:/pig_output_data
+    command: ["pig", "-f", "/pig_scripts/test_load_store.pig"]
+    networks:
+      - distribuidos_network
+    # depends_on: 
+    #   storage:
+    #     condition: service_healthy
 
 volumes:
   mongo_data:
+
+networks:
+  distribuidos_network:
+    driver: bridge
