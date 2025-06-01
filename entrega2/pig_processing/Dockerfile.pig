@@ -1,24 +1,18 @@
 # Dockerfile para Apache Pig
-# Guardar como ProyectoDistribuidos/entrega2/pig_processing/Dockerfile.pig
-
-# Usar la imagen JDK-SLIM
-FROM openjdk:11-jdk-slim 
+FROM openjdk:11-jdk-slim
 
 ENV PIG_VERSION 0.17.0
 ENV PIG_HOME /opt/pig/pig-${PIG_VERSION}
-ENV HADOOP_VERSION_PIG_EXPECTS 2.7.3 
+ENV HADOOP_VERSION_PIG_EXPECTS 2.7.3
 ENV HADOOP_HOME /opt/hadoop 
-ENV HADOOP_CONF_DIR $HADOOP_HOME/etc/hadoop 
-ENV PATH $PIG_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH 
+ENV HADOOP_CONF_DIR $HADOOP_HOME/etc/hadoop
+ENV PATH $PIG_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 ENV PIG_CLASSPATH $HADOOP_CONF_DIR
-# JAVA_HOME debería ser establecido por la imagen base openjdk:11-jdk-slim
-# Si es necesario, se puede definir explícitamente después de determinar la ruta correcta en la imagen.
-# ENV JAVA_HOME /opt/java/openjdk 
+# ENV JAVA_HOME /opt/java/openjdk # Generalmente seteado por la imagen base
 
 ENV MONGO_HADOOP_CONNECTOR_VERSION 2.0.2
 ENV MONGO_JAVA_DRIVER_VERSION 3.12.11
 
-# Paso 1: Actualizar e instalar dependencias básicas
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
         wget \
@@ -29,13 +23,11 @@ RUN apt-get update -y && \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Paso 2: Descargar y extraer Apache Pig
 RUN mkdir -p /opt/pig && \
     echo "Descargando Apache Pig ${PIG_VERSION}..." && \
     wget -qO- "https://archive.apache.org/dist/pig/pig-${PIG_VERSION}/pig-${PIG_VERSION}.tar.gz" | tar -xzf - -C /opt/pig && \
     echo "Apache Pig ${PIG_VERSION} descargado y extraído."
 
-# Paso 3: Crear directorios y archivos de configuración mínimos para Hadoop
 RUN mkdir -p $HADOOP_CONF_DIR && \
     echo '<configuration></configuration>' > $HADOOP_CONF_DIR/core-site.xml && \
     echo '<configuration></configuration>' > $HADOOP_CONF_DIR/hdfs-site.xml && \
@@ -44,7 +36,6 @@ RUN mkdir -p $HADOOP_CONF_DIR && \
     echo '#!/bin/bash\n# JAVA_HOME should be set by the base image or ENV\n# export JAVA_HOME=${JAVA_HOME}' > $HADOOP_CONF_DIR/hadoop-env.sh && \
     chmod +x $HADOOP_CONF_DIR/hadoop-env.sh
 
-# Paso 4: Descargar y colocar los JARs de Mongo-Hadoop y el driver de Java para MongoDB
 RUN mkdir -p $PIG_HOME/lib && \
     echo "Descargando mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar..." && \
     wget --timeout=60 -O $PIG_HOME/lib/mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar \
@@ -58,5 +49,16 @@ RUN mkdir -p $PIG_HOME/lib && \
     wget --timeout=60 -O $PIG_HOME/lib/mongo-java-driver-${MONGO_JAVA_DRIVER_VERSION}.jar \
          "https://repo1.maven.org/maven2/org/mongodb/mongo-java-driver/${MONGO_JAVA_DRIVER_VERSION}/mongo-java-driver-${MONGO_JAVA_DRIVER_VERSION}.jar" && \
     echo "mongo-java-driver descargado."
+
+# Copiar scripts UDF y archivos de datos necesarios para UDFs
+# Asumiendo que waze_udfs.py está en ./udfs/ relativo al contexto (pig_processing/)
+# y comunas_rm.geojson está en ../filtering_module/ relativo al contexto (pig_processing/)
+RUN mkdir -p /pig_udfs
+RUN mkdir -p /pig_data
+COPY ./udfs/waze_udfs.py /pig_udfs/waze_udfs.py
+COPY ../filtering_module/comunas_rm.geojson /pig_data/comunas_rm.geojson 
+# ^^^ Ajusta esta ruta si moviste comunas_rm.geojson a otro lugar accesible desde el contexto de build.
+# Si comunas_rm.geojson está ahora en ./entrega2/pig_processing/data_input/ por ejemplo, sería:
+# COPY ./data_input/comunas_rm.geojson /pig_data/comunas_rm.geojson
 
 WORKDIR /pig_scripts
