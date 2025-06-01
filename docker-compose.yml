@@ -65,7 +65,7 @@ services:
       - ./entrega2/pig_processing/data_output:/pig_output_data
       - ./entrega2/pig_processing/udfs:/pig_udfs 
       - ./entrega2/filtering_module/comunas_rm.geojson:/pig_data/comunas_rm.geojson 
-    # CAMBIO AQUÍ para ejecutar el script correcto
+      
     command: ["pig", "-x", "local", "-f", "/pig_scripts/process_waze_data.pig"] 
     networks:
       - distribuidos_network

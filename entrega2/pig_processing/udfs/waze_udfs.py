@@ -1,60 +1,85 @@
 # Archivo: ProyectoDistribuidos/entrega2/pig_processing/udfs/waze_udfs.py
-# coding: utf-8 # Especificar encoding por si acaso
+# coding: utf-8
 
-# Importar datetime.datetime explícitamente para evitar conflictos
 import datetime as dt_module 
-from datetime import timezone
+import json 
+import sys 
+import os
+import io 
 
-# El decorador @outputSchema es ideal, pero requiere que pig_util.py esté en el classpath de Jython,
-# lo cual puede ser complicado de configurar en la imagen Docker sin más pasos.
-# Por ahora, omitiremos el decorador y Pig intentará inferir los tipos.
-# Si la inferencia falla o es incorrecta, podemos especificar el esquema en el DEFINE del script Pig.
+COMMUNAS_GEOJSON_DATA = None
+GEOJSON_FILE_PATH_IN_PIG_CONTAINER = os.getenv('PIG_GEOJSON_PATH', '/pig_data/comunas_rm.geojson')
 
-# from pig_util import outputSchema # Comentado por ahora
+def _load_geojson_data_internal():
+    global COMMUNAS_GEOJSON_DATA
+    # ... (esta función se mantiene igual que la última vez, con los sys.stderr.write)
+    if COMMUNAS_GEOJSON_DATA is None:
+        sys.stderr.write("UDF_DEBUG: Attempting to load GeoJSON from '{}'...\n".format(GEOJSON_FILE_PATH_IN_PIG_CONTAINER))
+        if not os.path.exists(GEOJSON_FILE_PATH_IN_PIG_CONTAINER):
+            sys.stderr.write("UDF_DEBUG: ERROR - GeoJSON file NOT FOUND at '{}'\n".format(GEOJSON_FILE_PATH_IN_PIG_CONTAINER))
+            COMMUNAS_GEOJSON_DATA = {"type": "FeatureCollection", "features": []} 
+            return COMMUNAS_GEOJSON_DATA
+        try:
+            with io.open(GEOJSON_FILE_PATH_IN_PIG_CONTAINER, 'r', encoding='utf-8') as f:
+                COMMUNAS_GEOJSON_DATA = json.load(f)
+            if COMMUNAS_GEOJSON_DATA and 'features' in COMMUNAS_GEOJSON_DATA:
+                 sys.stderr.write("UDF_DEBUG: GeoJSON loaded. Features: {}\n".format(len(COMMUNAS_GEOJSON_DATA['features'])))
+            else:
+                sys.stderr.write("UDF_DEBUG: GeoJSON loaded but seems empty or no features key.\n")
+                COMMUNAS_GEOJSON_DATA = {"type": "FeatureCollection", "features": []}
+        except Exception as e:
+            COMMUNAS_GEOJSON_DATA = {"type": "FeatureCollection", "features": []}
+            sys.stderr.write("UDF_DEBUG: CRITICAL ERROR loading GeoJSON: {}\n".format(str(e)))
+    return COMMUNAS_GEOJSON_DATA
 
-# @outputSchema("hora:int") # Comentado por ahora
+
 def iso_to_hour(timestamp_iso_str):
-    """
-    Convierte un string de timestamp ISO 8601 a la hora (entero 0-23).
-    Retorna None si el parseo falla.
-    """
-    if not timestamp_iso_str:
+    # Simplificar la verificación de entrada para Jython
+    if timestamp_iso_str is None or str(timestamp_iso_str).strip() == "": # Convertir a str por si acaso y luego trim
+        sys.stderr.write("UDF_DEBUG_HOUR: Received None or empty input: '{}'\n".format(timestamp_iso_str))
         return None
     try:
-        # Python 3.7+ datetime.fromisoformat maneja offsets como +00:00 y Z
-        # Asegurarse de que 'Z' se maneje correctamente si aparece.
-        datetime_obj = dt_module.datetime.fromisoformat(timestamp_iso_str.replace("Z", "+00:00"))
+        # Convertir el input de Jython a un string de Python estándar
+        ts_to_parse = str(timestamp_iso_str)
+        
+        if '+' in ts_to_parse: ts_to_parse = ts_to_parse.split('+')[0]
+        elif 'Z' in ts_to_parse: ts_to_parse = ts_to_parse.split('Z')[0]
+        if '.' in ts_to_parse: ts_to_parse = ts_to_parse.split('.')[0]
+        
+        datetime_obj = dt_module.datetime.strptime(ts_to_parse, "%Y-%m-%dT%H:%M:%S")
         return datetime_obj.hour
-    except ValueError: # Si fromisoformat falla (ej. formato inesperado)
-        # print(f"UDF_iso_to_hour: ValueError parseando '{timestamp_iso_str}'") # Para debug en logs de Pig/Hadoop
-        return None
-    except Exception as e: # Captura general para otros errores inesperados
-        # print(f"UDF_iso_to_hour: Error general parseando '{timestamp_iso_str}': {e}")
+    except Exception as e: # Capturar cualquier error durante el parseo
+        sys.stderr.write("UDF_DEBUG_HOUR: Error parsing '{}': {}\n".format(timestamp_iso_str, str(e)))
         return None
 
-# @outputSchema("dia_semana:int") # Comentado por ahora
 def iso_to_day_of_week(timestamp_iso_str):
-    """
-    Convierte un string de timestamp ISO 8601 al día de la semana (entero, Lunes=0, Domingo=6).
-    Retorna None si el parseo falla.
-    """
-    if not timestamp_iso_str:
+    # Simplificar la verificación de entrada para Jython
+    if timestamp_iso_str is None or str(timestamp_iso_str).strip() == "": # Convertir a str por si acaso y luego trim
+        sys.stderr.write("UDF_DEBUG_DOW: Received None or empty input: '{}'\n".format(timestamp_iso_str))
         return None
     try:
-        datetime_obj = dt_module.datetime.fromisoformat(timestamp_iso_str.replace("Z", "+00:00"))
-        return datetime_obj.weekday()
-    except ValueError:
-        # print(f"UDF_iso_to_day_of_week: ValueError parseando '{timestamp_iso_str}'")
-        return None
+        # Convertir el input de Jython a un string de Python estándar
+        ts_to_parse = str(timestamp_iso_str)
+
+        if '+' in ts_to_parse: ts_to_parse = ts_to_parse.split('+')[0]
+        elif 'Z' in ts_to_parse: ts_to_parse = ts_to_parse.split('Z')[0]
+        if '.' in ts_to_parse: ts_to_parse = ts_to_parse.split('.')[0]
+            
+        datetime_obj = dt_module.datetime.strptime(ts_to_parse, "%Y-%m-%dT%H:%M:%S")
+        return datetime_obj.weekday() 
     except Exception as e:
-        # print(f"UDF_iso_to_day_of_week: Error general parseando '{timestamp_iso_str}': {e}")
+        sys.stderr.write("UDF_DEBUG_DOW: Error parsing '{}': {}\n".format(timestamp_iso_str, str(e)))
         return None
 
-# Placeholder para el UDF de comuna - NO LO USAREMOS EN ESTE PASO
-# @outputSchema("comuna:chararray") # Comentado por ahora
 def determine_comuna_py(lon_str, lat_str):
-    # Esta función se implementará después.
-    # Por ahora, para evitar errores si se llama accidentalmente:
-    if lon_str and lat_str:
-        return "COMUNA_PENDIENTE_UDF"
-    return None
+    _load_geojson_data_internal() # Asegurarse de que se intente cargar
+    # Para depurar, simplemente devolvemos un string fijo o los inputs
+    if lon_str is not None and lat_str is not None:
+        try:
+            # Intentar convertir a float para ver si son numéricos
+            float(str(lon_str)) 
+            float(str(lat_str))
+            return u"COMUNA_UDF_CALLED_VALID_INPUTS"
+        except:
+            return u"COMUNA_UDF_CALLED_INVALID_COORDS"
+    return u"COMUNA_UDF_CALLED_NULL_INPUTS"
