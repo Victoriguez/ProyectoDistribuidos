@@ -3,11 +3,10 @@
 -- Archivo: process_waze_data.pig
 --------------------------------------------------------------------------------
 
--- Eliminar carpetas de salida anteriores
 rmf /pig_output_data/count_by_standardized_type;
 rmf /pig_output_data/count_by_comuna;
 rmf /pig_output_data/count_by_hour;
-rmf /pig_output_data/count_by_day_of_week; -- NUEVO RMF
+rmf /pig_output_data/count_by_day_of_week;
 rmf /pig_output_data/all_enriched_events_table;
 
 raw_events_from_tsv = LOAD '/pig_input_data/waze_events.tsv' USING PigStorage('\t') 
@@ -55,29 +54,29 @@ data_for_analysis = events_with_std_type;
 data_for_type_count = FOREACH data_for_analysis GENERATE standardized_type, count_one;
 grouped_by_std_type = GROUP data_for_type_count BY standardized_type;
 count_by_std_type = FOREACH grouped_by_std_type {GENERATE group AS event_type, SUM(data_for_type_count.count_one) AS total_incidentes;};
-STORE count_by_std_type INTO '/pig_output_data/count_by_standardized_type' USING PigStorage(',');
+STORE count_by_std_type INTO '/pig_output_data/count_by_standardized_type' USING PigStorage('\t'); -- CAMBIO AQUÍ
 
 -- Conteo por Comuna
 data_for_comuna_count = FOREACH data_for_analysis GENERATE comuna, count_one;
 grouped_by_comuna = GROUP data_for_comuna_count BY comuna;
 count_by_comuna = FOREACH grouped_by_comuna {GENERATE group AS comuna_nombre, SUM(data_for_comuna_count.count_one) AS total_incidentes_comuna;};
-STORE count_by_comuna INTO '/pig_output_data/count_by_comuna' USING PigStorage(',');
+STORE count_by_comuna INTO '/pig_output_data/count_by_comuna' USING PigStorage('\t'); -- CAMBIO AQUÍ
 
 -- Conteo por Hora del Día
-valid_time_data_hour = FILTER data_for_analysis BY hora_del_dia IS NOT NULL; -- Renombrado para evitar colisión
+valid_time_data_hour = FILTER data_for_analysis BY hora_del_dia IS NOT NULL;
 data_for_hour_count = FOREACH valid_time_data_hour GENERATE hora_del_dia, count_one;
 grouped_by_hour = GROUP data_for_hour_count BY hora_del_dia;
 count_by_hour = FOREACH grouped_by_hour {GENERATE group AS hora, SUM(data_for_hour_count.count_one) AS total_incidentes_hora;};
 ordered_by_hour = ORDER count_by_hour BY hora ASC;
-STORE ordered_by_hour INTO '/pig_output_data/count_by_hour' USING PigStorage(',');
+STORE ordered_by_hour INTO '/pig_output_data/count_by_hour' USING PigStorage('\t'); -- CAMBIO AQUÍ
 
--- Conteo por Día de la Semana (Lunes=0, Domingo=6)
-valid_time_data_dow = FILTER data_for_analysis BY dia_semana IS NOT NULL; -- Renombrado
+-- Conteo por Día de la Semana
+valid_time_data_dow = FILTER data_for_analysis BY dia_semana IS NOT NULL;
 data_for_dow_count = FOREACH valid_time_data_dow GENERATE dia_semana, count_one;
 grouped_by_dow = GROUP data_for_dow_count BY dia_semana;
 count_by_dow = FOREACH grouped_by_dow {GENERATE group AS dia, SUM(data_for_dow_count.count_one) AS total_incidentes_dia;};
 ordered_by_dow = ORDER count_by_dow BY dia ASC;
-STORE ordered_by_dow INTO '/pig_output_data/count_by_day_of_week' USING PigStorage(',');
-DUMP ordered_by_dow; -- Para ver este resultado
+STORE ordered_by_dow INTO '/pig_output_data/count_by_day_of_week' USING PigStorage('\t'); -- CAMBIO AQUÍ
 
+-- Guardar la tabla enriquecida completa
 STORE data_for_analysis INTO '/pig_output_data/all_enriched_events_table' USING PigStorage('\t');

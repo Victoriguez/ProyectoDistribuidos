@@ -11,6 +11,22 @@ services:
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
+      timeout: 5s  # <--- CORREGIDO
+      retries: 5   # <--- CORREGIDO
+    networks:
+      - distribuidos_network
+
+  cache: 
+    # build: ./cache # Si tenías esto, coméntalo o asegúrate que tu Dockerfile base instale redis-tools
+    image: redis:latest # <--- CAMBIO AQUÍ (o redis:7 si quieres una versión específica)
+    container_name: redis_cache_service 
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data 
+    healthcheck: 
+      test: ["CMD", "redis-cli", "ping"] # Este healthcheck seguirá funcionando
+      interval: 10s
       timeout: 5s
       retries: 5
     networks:
@@ -20,33 +36,33 @@ services:
     build: ./scraper
     container_name: scraper 
     depends_on:
-      storage:
+      storage: 
         condition: service_healthy
     environment: 
-      - MONGO_HOST=storage 
-      - MONGO_PORT=27017
+      - MONGO_HOST=storage
+      - MONGO_PORT=27017 # Separar variables de entorno
       - DB_NAME_SCRAPER=waze_db
       - COLLECTION_NAME_SCRAPER=eventos
       - SCRAPE_INTERVAL_SECONDS=300 
-      - MAX_EVENTS_TO_COLLECT=370 # Poner un poco más que los exportados para asegurar que el scraper pueda correr si es necesario
+      - MAX_EVENTS_TO_COLLECT=450
     volumes:
       - ./scraper:/app
     networks:
       - distribuidos_network
 
   mongo_exporter:
-    build:
+    build: 
       context: ./mongo_exporter
       dockerfile: Dockerfile
     container_name: mongo_exporter_service
     depends_on:
-      storage:
+      storage: 
         condition: service_healthy
-      scraper: # Hacemos que espere al scraper si el scraper está diseñado para terminar
+      scraper: 
         condition: service_completed_successfully
     environment:
       - MONGO_HOST_EXPORTER=storage
-      - DB_NAME_EXPORTER=waze_db
+      - DB_NAME_EXPORTER=waze_db # Separar variables
       - COLLECTION_NAME_EXPORTER=eventos
       - OUTPUT_TSV_PATH_EXPORTER=/exported_data/waze_events.tsv 
     volumes:
@@ -55,25 +71,43 @@ services:
       - distribuidos_network
 
   pig_processor:
-    build:
-      context: ./entrega2/pig_processing 
+    build: 
+      context: ./entrega2/pig_processing
       dockerfile: Dockerfile.pig 
     container_name: pig_service_container
     volumes:
       - ./entrega2/pig_processing/scripts:/pig_scripts
       - ./entrega2/pig_processing/data_input:/pig_input_data 
-      - ./entrega2/pig_processing/data_output:/pig_output_data
-      # Ya no necesitamos montar /pig_udfs ni /pig_data/comunas_rm.geojson si se maneja todo en el exporter
+      - ./entrega2/pig_processing/data_output:/pig_output_data 
     command: ["pig", "-x", "local", "-f", "/pig_scripts/process_waze_data.pig"]
     networks:
       - distribuidos_network
     depends_on:
       mongo_exporter: 
-        condition: service_completed_successfully 
-        
+        condition: service_completed_successfully
+
+  cache_loader:
+    build: 
+      context: ./cache_loader
+      dockerfile: Dockerfile
+    container_name: cache_loader_service
+    depends_on:
+      pig_processor: 
+        condition: service_completed_successfully
+      cache: 
+        condition: service_healthy
+    environment:
+      - REDIS_HOST_LOADER=cache 
+      - PIG_OUTPUT_BASE_DIR=/pig_results_input
+    volumes:
+      - ./entrega2/pig_processing/data_output:/pig_results_input 
+    networks:
+      - distribuidos_network
+
 volumes:
   mongo_data:
+  redis_data:
 
 networks:
-  distribuidos_network:
+  distribuidos_network: 
     driver: bridge
