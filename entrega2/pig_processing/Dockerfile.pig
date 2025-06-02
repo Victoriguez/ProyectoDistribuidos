@@ -8,27 +8,20 @@ ENV HADOOP_HOME /opt/hadoop
 ENV HADOOP_CONF_DIR $HADOOP_HOME/etc/hadoop
 ENV PATH $PIG_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 ENV PIG_CLASSPATH $HADOOP_CONF_DIR
+ENV PYTHONIOENCODING UTF-8 # Buena práctica, aunque no usemos UDFs Python ahora
 
-# Variable de entorno para Python/Jython (puede ayudar con problemas de encoding)
-ENV PYTHONIOENCODING UTF-8 
-
-ENV MONGO_HADOOP_CONNECTOR_VERSION 2.0.2
-ENV MONGO_JAVA_DRIVER_VERSION 3.12.11
+# MONGO_HADOOP_CONNECTOR_VERSION y MONGO_JAVA_DRIVER_VERSION ya no son necesarios
+# si Pig solo lee de TSV, pero no hace daño dejarlos por si usas MongoLoader en el futuro.
 
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
         wget \
         procps \
-        ca-certificates \
-        gnupg \
-        dirmngr \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /opt/pig && \
-    echo "Descargando Apache Pig ${PIG_VERSION}..." && \
-    wget -qO- "https://archive.apache.org/dist/pig/pig-${PIG_VERSION}/pig-${PIG_VERSION}.tar.gz" | tar -xzf - -C /opt/pig && \
-    echo "Apache Pig ${PIG_VERSION} descargado y extraído."
+    wget -qO- "https://archive.apache.org/dist/pig/pig-${PIG_VERSION}/pig-${PIG_VERSION}.tar.gz" | tar -xzf - -C /opt/pig
 
 RUN mkdir -p $HADOOP_CONF_DIR && \
     echo '<configuration></configuration>' > $HADOOP_CONF_DIR/core-site.xml && \
@@ -38,23 +31,7 @@ RUN mkdir -p $HADOOP_CONF_DIR && \
     echo '#!/bin/bash\n# export JAVA_HOME=${JAVA_HOME}' > $HADOOP_CONF_DIR/hadoop-env.sh && \
     chmod +x $HADOOP_CONF_DIR/hadoop-env.sh
 
-RUN mkdir -p $PIG_HOME/lib && \
-    echo "Descargando mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar..." && \
-    wget --timeout=60 -O $PIG_HOME/lib/mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar \
-         "https://repo1.maven.org/maven2/org/mongodb/mongo-hadoop/mongo-hadoop-core/${MONGO_HADOOP_CONNECTOR_VERSION}/mongo-hadoop-core-${MONGO_HADOOP_CONNECTOR_VERSION}.jar" && \
-    echo "mongo-hadoop-core descargado." && \
-    echo "Descargando mongo-hadoop-pig-${MONGO_HADOOP_CONNECTOR_VERSION}.jar..." && \
-    wget --timeout=60 -O $PIG_HOME/lib/mongo-hadoop-pig-${MONGO_HADOOP_CONNECTOR_VERSION}.jar \
-         "https://repo1.maven.org/maven2/org/mongodb/mongo-hadoop/mongo-hadoop-pig/${MONGO_HADOOP_CONNECTOR_VERSION}/mongo-hadoop-pig-${MONGO_HADOOP_CONNECTOR_VERSION}.jar" && \
-    echo "mongo-hadoop-pig descargado." && \
-    echo "Descargando mongo-java-driver-${MONGO_JAVA_DRIVER_VERSION}.jar..." && \
-    wget --timeout=60 -O $PIG_HOME/lib/mongo-java-driver-${MONGO_JAVA_DRIVER_VERSION}.jar \
-         "https://repo1.maven.org/maven2/org/mongodb/mongo-java-driver/${MONGO_JAVA_DRIVER_VERSION}/mongo-java-driver-${MONGO_JAVA_DRIVER_VERSION}.jar" && \
-    echo "mongo-java-driver descargado."
-
-RUN mkdir -p /pig_udfs
-RUN mkdir -p /pig_data
-COPY ./udfs/waze_udfs.py /pig_udfs/waze_udfs.py
-COPY comunas_rm.geojson /pig_data/comunas_rm.geojson
+# Ya no necesitamos los JARs de mongo-hadoop si Pig no se conecta a Mongo
+# Las líneas de descarga de JARs de mongo pueden ser eliminadas o comentadas
 
 WORKDIR /pig_scripts

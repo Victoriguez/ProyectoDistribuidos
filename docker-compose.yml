@@ -63,16 +63,14 @@ services:
       - ./entrega2/pig_processing/scripts:/pig_scripts
       - ./entrega2/pig_processing/data_input:/pig_input_data 
       - ./entrega2/pig_processing/data_output:/pig_output_data
-      - ./entrega2/pig_processing/udfs:/pig_udfs 
-      - ./entrega2/filtering_module/comunas_rm.geojson:/pig_data/comunas_rm.geojson 
-      
-    command: ["pig", "-x", "local", "-f", "/pig_scripts/process_waze_data.pig"] 
+      # Ya no necesitamos montar /pig_udfs ni /pig_data/comunas_rm.geojson si se maneja todo en el exporter
+    command: ["pig", "-x", "local", "-f", "/pig_scripts/process_waze_data.pig"]
     networks:
       - distribuidos_network
     depends_on:
       mongo_exporter: 
         condition: service_completed_successfully 
-
+        
 volumes:
   mongo_data:
 
