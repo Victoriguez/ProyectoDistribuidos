@@ -1,3 +1,79 @@
+# Proyecto Sistemas Distribuidos - Entrega 2: Procesamiento y Análisis de Tráfico
+
+**Integrantes:**
+*   [Tu Nombre Completo]
+*   [Nombre Completo de tu Compañero/a]
+
+## Descripción General
+
+Esta segunda entrega del proyecto se enfoca en el procesamiento y análisis de los datos de tráfico recolectados en la Entrega 1. El objetivo es transformar los datos crudos de Waze, almacenados en MongoDB, en información agregada y útil. Para ello, se implementa un pipeline que enriquece los datos, los procesa con Apache Pig, y finalmente carga los resultados analíticos en un caché Redis para su futura visualización.
+
+El pipeline de la Entrega 2 se compone de los siguientes módulos principales, orquestados por Docker Compose:
+
+1.  **Scraper**: Recolecta datos de la API GeoRSS de Waze.
+2.  **Almacenamiento (MongoDB)**: Persiste los datos crudos de Waze.
+3.  **Mongo Exporter (Python)**: Extrae datos de MongoDB, los enriquece (añadiendo comuna, hora del día, día de la semana) usando `shapely` y los guarda como un archivo TSV.
+4.  **Pig Processor (Apache Pig)**: Lee el archivo TSV, realiza filtrado, estandarización de tipos y análisis agregados (conteo por tipo, comuna, hora y día).
+5.  **Cache Loader (Python)**: Carga los resultados de Pig en Redis.
+6.  **Sistema de Caché (Redis)**: Almacena los resultados analíticos para acceso rápido.
+
+---
+
+## Arquitectura del Sistema (Entrega 2)
+
+El flujo de datos y procesamiento es el siguiente:
+
+`Waze API -> Scraper (Python) -> MongoDB (storage) -> Mongo Exporter (Python + Shapely) -> waze_events.tsv -> Pig Processor (Apache Pig) -> Archivos TSV de Resultados -> Cache Loader (Python) -> Redis (redis_actual_cache)`
+
+Todos los servicios son gestionados y orquestados mediante Docker y Docker Compose.
+
+---
+
+## Tecnologías Utilizadas
+
+*   **Lenguajes de Programación:** Python 3.10, Pig Latin (Apache Pig 0.17.0)
+*   **Frameworks/Librerías Python:** `requests`, `pymongo`, `shapely`, `redis`, `csv`, `json`, `datetime`, `os`, `io`, `sys`
+*   **Bases de Datos/Caché:** MongoDB 6.0, Redis (imagen `redis:alpine`)
+*   **Contenerización:** Docker, Docker Compose
+*   **Procesamiento de Datos:** Apache Pig 0.17.0 (ejecutándose sobre OpenJDK 11)
+
+---
+
+## Prerrequisitos
+
+*   Docker Desktop instalado y en ejecución.
+*   Docker Compose V2 (generalmente incluido con Docker Desktop).
+*   Git (para clonar el repositorio).
+*   Conexión a internet (para descargar imágenes Docker y dependencias).
+
+---
+
+## Estructura del Proyecto (Principales Componentes de la Entrega 2)
+
+ProyectoDistribuidos/
+├── docker-compose.yml
+├── scraper/
+│ ├── Dockerfile
+│ ├── requirements.txt
+│ └── scraper.py
+├── mongo_exporter/
+│ ├── Dockerfile
+│ ├── requirements.txt
+│ ├── export_mongo_to_tsv.py
+│ └── comunas_rm.geojson
+├── entrega2/
+│ └── pig_processing/
+│ ├── Dockerfile.pig
+│ ├── data_input/ # Aquí se guarda waze_events.tsv
+│ ├── data_output/ # Aquí Pig guarda sus resultados
+│ └── scripts/
+│ └── process_waze_data.pig
+├── cache_loader/
+│ ├── Dockerfile
+│ ├── requirements.txt
+│ └── load_results_to_redis.py
+└── README.md
+
 ## Instrucciones de Ejecución del Pipeline Completo (Entrega 2)
 
 Siga estos pasos desde la raíz del repositorio clonado (`ProyectoDistribuidos/`):
