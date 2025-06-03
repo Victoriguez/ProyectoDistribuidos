@@ -116,11 +116,13 @@ docker-compose down --remove-orphans
 Si deseas limpiar los resultados anteriores de Pig para una nueva ejecución:
 
   ### En PowerShell (Windows)
+
     ```bash
     Remove-Item -Recurse -Force ./entrega2/pig_processing/data_output/*
     ```
 
   ### En Bash (Linux/macOS)
+  
     ```bash
     rm -rf ./entrega2/pig_processing/data_output/*
     ```
