@@ -21,7 +21,7 @@ RESULTS_FILES_INFO = {
         'redis_prefix': 'stats:hour:'
     },
     'count_by_day_of_week': {
-        'filepath': os.path.join(PIG_OUTPUT_BASE_DIR, 'count_by_day_of_week', 'part-r-00000'), # Asegúrate que Pig genere esta carpeta
+        'filepath': os.path.join(PIG_OUTPUT_BASE_DIR, 'count_by_day_of_week', 'part-r-00000'),
         'redis_prefix': 'stats:dow:'
     }
 }
@@ -42,7 +42,7 @@ def connect_to_redis(retry_interval=5, max_retries=12):
 
 def load_tsv_to_redis(redis_client, filepath, redis_key_prefix):
     if not os.path.exists(filepath):
-        print(f"CacheLoader: ARCHIVO NO ENCONTRADO, omitiendo: {filepath}", flush=True) # Más visible
+        print(f"CacheLoader: ARCHIVO NO ENCONTRADO, omitiendo: {filepath}", flush=True)
         return 0
     
     print(f"CacheLoader: Procesando archivo {filepath} para Redis con prefijo '{redis_key_prefix}'...", flush=True)
@@ -50,32 +50,44 @@ def load_tsv_to_redis(redis_client, filepath, redis_key_prefix):
     rows_inspected = 0
     try:
         with open(filepath, 'r', encoding='utf-8') as tsvfile:
-            reader = csv.reader(tsvfile, delimiter='\t')
-            for i, row in enumerate(reader): # Añadir índice para debug
+            # LEER LÍNEA POR LÍNEA MANUALMENTE PARA DEBUG
+            for i, line_content in enumerate(tsvfile):
                 rows_inspected += 1
-                print(f"CacheLoader: Leyendo fila {i+1}: {row} (longitud: {len(row)})", flush=True) # <-- DEBUG ROW
+                # Imprimir la línea cruda y su representación para ver caracteres ocultos
+                print(f"CacheLoader: RAW Line {i+1}: '{line_content.strip()}' (repr: {repr(line_content.strip())})", flush=True) 
                 
-                # Filtrar líneas completamente vacías que csv.reader puede producir
-                if not row: 
-                    print(f"CacheLoader: Fila {i+1} está vacía, omitiendo.", flush=True)
+                # Usar csv.reader en una sola línea para parsearla
+                # Esto es un poco ineficiente pero bueno para debug
+                # Creamos un "falso" iterable de una sola línea para csv.reader
+                line_iterable = [line_content.strip()] # Asegurarse que no haya líneas vacías al final
+                if not line_content.strip():
+                    print(f"CacheLoader: Línea {i+1} está vacía (después de strip), omitiendo.", flush=True)
                     continue
 
-                if len(row) == 2:
-                    key_suffix = str(row[0]).strip()
-                    value = str(row[1]).strip()
+                reader = csv.reader(line_iterable, delimiter='\t')
+                for row in reader: # Debería iterar solo una vez
+                    print(f"CacheLoader: Parsed Row {i+1}: {row} (longitud: {len(row)})", flush=True)
                     
-                    if not key_suffix or key_suffix.lower() == 'null': 
-                        print(f"CacheLoader: Clave vacía o 'null' en fila {i+1}, omitiendo: {row}", flush=True)
+                    if not row: 
+                        print(f"CacheLoader: Fila {i+1} (después de csv.reader) está vacía, omitiendo.", flush=True)
                         continue
-                    if not value or value.lower() == 'null':
-                        value = "0" 
 
-                    redis_key = f"{redis_key_prefix}{key_suffix}"
-                    redis_client.set(redis_key, value)
-                    print(f"CacheLoader: SET {redis_key} = {value}", flush=True) # <-- DEBUG SET
-                    count_loaded += 1
-                else:
-                    print(f"CacheLoader: Fila {i+1} con formato incorrecto omitida (esperaba 2 columnas, obtuvo {len(row)}): {row}", flush=True)
+                    if len(row) == 2:
+                        key_suffix = str(row[0]).strip()
+                        value = str(row[1]).strip()
+                        
+                        if not key_suffix or key_suffix.lower() == 'null': 
+                            print(f"CacheLoader: Clave vacía o 'null' en fila {i+1}, omitiendo: {row}", flush=True)
+                            continue
+                        if not value or value.lower() == 'null':
+                            value = "0" 
+
+                        redis_key = f"{redis_key_prefix}{key_suffix}"
+                        redis_client.set(redis_key, value)
+                        print(f"CacheLoader: SET {redis_key} = {value}", flush=True)
+                        count_loaded += 1
+                    else:
+                        print(f"CacheLoader: Fila {i+1} con formato incorrecto omitida (esperaba 2 columnas, obtuvo {len(row)}): {row}", flush=True)
         
         print(f"CacheLoader: {rows_inspected} filas inspeccionadas en {filepath}.", flush=True)
         print(f"CacheLoader: {count_loaded} registros cargados desde {filepath}", flush=True)
@@ -90,18 +102,16 @@ def main():
     if not redis_conn: return
 
     total_records_loaded = 0
-    # Asegurarse de que la carpeta de día de la semana exista si se va a procesar
-    if not os.path.exists(RESULTS_FILES_INFO['count_by_day_of_week']['filepath']):
-        print(f"CacheLoader: Archivo para 'count_by_day_of_week' no encontrado. ¿Pig lo generó?", flush=True)
-        # Opcional: removerlo de RESULTS_FILES_INFO si no se espera
-        # del RESULTS_FILES_INFO['count_by_day_of_week'] 
+    active_results_files = {} # Solo procesar los que existen
 
     for result_name, info in RESULTS_FILES_INFO.items():
+        if os.path.exists(info['filepath']):
+            active_results_files[result_name] = info
+        else:
+            print(f"CacheLoader: Archivo para '{result_name}' NO encontrado en {info['filepath']}, se omitirá.", flush=True)
+            
+    for result_name, info in active_results_files.items():
         print(f"\nCacheLoader: Cargando resultados para '{result_name}'...", flush=True)
-        # Verificar si el archivo existe antes de intentar cargarlo, especialmente para DOW
-        if result_name == 'count_by_day_of_week' and not os.path.exists(info['filepath']):
-            print(f"CacheLoader: Omitiendo {result_name} porque el archivo no existe.", flush=True)
-            continue
         num = load_tsv_to_redis(redis_conn, info['filepath'], info['redis_prefix'])
         total_records_loaded += num
     

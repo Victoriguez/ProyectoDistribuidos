@@ -1,4 +1,5 @@
-version: '3.8' # Puedes quitar esta línea
+# Quitar 'version' si Docker Compose da warning, aunque no es un error funcional.
+# version: '3.8' 
 
 services:
   storage: 
@@ -11,24 +12,42 @@ services:
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
-      timeout: 5s  # <--- CORREGIDO
-      retries: 5   # <--- CORREGIDO
+      timeout: 5s   # CORREGIDO
+      retries: 5    # CORREGIDO
     networks:
       - distribuidos_network
 
-  cache: 
-    # build: ./cache # Si tenías esto, coméntalo o asegúrate que tu Dockerfile base instale redis-tools
-    image: redis:latest # <--- CAMBIO AQUÍ (o redis:7 si quieres una versión específica)
-    container_name: redis_cache_service 
+  cache_entrega1: # Tu servicio de caché original de la Entrega 1 (Flask app)
+    build: ./cache
+    container_name: cache_entrega1_service 
+    depends_on:
+      storage:
+        condition: service_healthy
     ports:
-      - "6379:6379"
+      - "5001:5001" 
+    environment:
+      - CACHE_SIZE=8
+      - POLICY=LRU
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/metrics"]
+      interval: 15s
+      timeout: 10s  # CORREGIDO
+      retries: 10   # CORREGIDO
+    networks:
+      - distribuidos_network
+
+  redis_actual_cache: # Nuevo servicio Redis real
+    image: redis:alpine 
+    container_name: redis_cache_for_pig_results
+    ports:
+      - "6380:6379" 
     volumes:
-      - redis_data:/data 
+      - redis_pig_data:/data 
     healthcheck: 
-      test: ["CMD", "redis-cli", "ping"] # Este healthcheck seguirá funcionando
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 5s   # CORREGIDO
+      retries: 5    # CORREGIDO
     networks:
       - distribuidos_network
 
@@ -40,7 +59,7 @@ services:
         condition: service_healthy
     environment: 
       - MONGO_HOST=storage
-      - MONGO_PORT=27017 # Separar variables de entorno
+      - MONGO_PORT=27017
       - DB_NAME_SCRAPER=waze_db
       - COLLECTION_NAME_SCRAPER=eventos
       - SCRAPE_INTERVAL_SECONDS=300 
@@ -62,7 +81,7 @@ services:
         condition: service_completed_successfully
     environment:
       - MONGO_HOST_EXPORTER=storage
-      - DB_NAME_EXPORTER=waze_db # Separar variables
+      - DB_NAME_EXPORTER=waze_db
       - COLLECTION_NAME_EXPORTER=eventos
       - OUTPUT_TSV_PATH_EXPORTER=/exported_data/waze_events.tsv 
     volumes:
@@ -94,10 +113,11 @@ services:
     depends_on:
       pig_processor: 
         condition: service_completed_successfully
-      cache: 
+      redis_actual_cache: # Depende del NUEVO servicio Redis
         condition: service_healthy
     environment:
-      - REDIS_HOST_LOADER=cache 
+      - REDIS_HOST_LOADER=redis_actual_cache # Apunta al NUEVO servicio Redis
+      - REDIS_PORT_LOADER=6379     
       - PIG_OUTPUT_BASE_DIR=/pig_results_input
     volumes:
       - ./entrega2/pig_processing/data_output:/pig_results_input 
@@ -106,7 +126,7 @@ services:
 
 volumes:
   mongo_data:
-  redis_data:
+  redis_pig_data:
 
 networks:
   distribuidos_network: 
