@@ -178,7 +178,7 @@ Datos en Redis:
 
 1.  **Clonar el Repositorio (si es necesario):**
     ```bash
-    git clone [URL_DE_TU_REPOSITORIO_GIT]
+    git clone [https://github.com/Victoriguez/ProyectoDistribuidos.git]
     cd ProyectoDistribuidos
     ```
 
