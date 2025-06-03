@@ -171,3 +171,160 @@ Datos en Redis:
   ### Repositorio
 
    https://github.com/Victoriguez/ProyectoDistribuidos
+
+
+
+## Instrucciones de Ejecución del Pipeline Completo
+
+1.  **Clonar el Repositorio (si es necesario):**
+    ```bash
+    git clone [URL_DE_TU_REPOSITORIO_GIT]
+    cd ProyectoDistribuidos
+    ```
+
+2.  **Asegurar la Ubicación del Archivo GeoJSON:**
+    El archivo `comunas_rm.geojson` debe estar presente en la carpeta `mongo_exporter/` para que el servicio `mongo_exporter` pueda determinar las comunas.
+
+3.  **Limpiar Ejecuciones Anteriores (Recomendado para una corrida limpia):**
+    Desde la raíz del proyecto (`ProyectoDistribuidos/`) en tu terminal (PowerShell/bash):
+    ```bash
+    docker-compose down --remove-orphans
+    ```
+    Elimina manualmente las carpetas de salida de Pig si el script Pig no tiene `rmf` o si quieres asegurar una pizarra limpia:
+    ```powershell
+    # En PowerShell
+    Remove-Item -Recurse -Force ./entrega2/pig_processing/data_output/*
+    ```
+    ```bash
+    # En bash (Linux/macOS)
+    # rm -rf ./entrega2/pig_processing/data_output/*
+    ```
+    *(Nota: El script Pig `process_waze_data.pig` proporcionado ya incluye comandos `rmf` para limpiar sus directorios de salida).*
+
+4.  **Ejecutar el Pipeline Completo:**
+    Este comando construirá las imágenes necesarias (la primera vez o si los Dockerfiles cambiaron) e iniciará todos los servicios en el orden correcto definido por `depends_on`.
+    ```bash
+    docker-compose up --build storage scraper mongo_exporter pig_processor cache_loader cache
+    ```
+    *   `--build`: Asegura que las imágenes se construyan si hay cambios en los Dockerfiles.
+    *   Se incluyen todos los servicios relevantes para la Entrega 2.
+    *   Espera a que todos los servicios terminen su ejecución (scraper, mongo_exporter, pig_processor, cache_loader saldrán con código 0). Los servicios `storage` (MongoDB) y `cache` (Redis) permanecerán corriendo.
+
+5.  **Observar los Logs:**
+    La terminal mostrará los logs de todos los servicios. Presta atención a:
+    *   **Scraper:** Mensajes de recolección de eventos.
+    *   **Mongo Exporter:** Mensajes de conexión a MongoDB, carga de GeoJSON, procesamiento de comunas/timestamps y escritura del archivo TSV (ej. "Exportación completada. X documentos escritos.").
+    *   **Pig Processor:** Mensajes de inicio de Pig, lectura del TSV (ej. "Successfully read X records..."), y la salida de los `DUMP` que tengas activos. Debería terminar con "Pig script completed...".
+    *   **Cache Loader:** Mensajes de conexión a Redis, lectura de los archivos de resultados de Pig y carga de datos en Redis (ej. "SET stats:type:CONGESTION = YYY").
+
+6.  **Para Detener los Servicios que Quedan Corriendo (MongoDB, Redis):**
+    Presiona `Ctrl + C` en la terminal donde ejecutaste `docker-compose up`. Si no se detienen, abre otra terminal y ejecuta:
+    ```bash
+    docker-compose down
+    ```
+
+---
+
+## Descripción de los Componentes del Pipeline
+
+#### 1. Scraper (Recolector de Datos de Waze)
+*   **Ubicación:** `scraper/`
+*   **Tecnología:** Python, `requests`.
+*   **Función:** Consulta la API `georss` de Waze para obtener datos de alertas (tipo, subtipo, descripción, ubicación, timestamp).
+*   **Salida:** Almacena los datos crudos en la colección `eventos` de la base de datos `waze_db` en MongoDB (servicio `storage`).
+*   **Configuración:** El número máximo de eventos a recolectar (`MAX_EVENTS_TO_COLLECT`) se puede configurar en `docker-compose.yml`.
+
+#### 2. Mongo Exporter (Extracción y Enriquecimiento)
+*   **Ubicación:** `mongo_exporter/`
+*   **Tecnología:** Python, `pymongo`, `shapely`, `csv`, `json`.
+*   **Función:**
+    *   Lee los datos de la colección `eventos` de MongoDB.
+    *   Carga el archivo `comunas_rm.geojson`.
+    *   Para cada evento, determina la **comuna** utilizando `shapely` para verificar si el punto de ubicación del evento está contenido en alguno de los polígonos de las comunas.
+    *   Parsea el `timestamp_waze` para extraer `hora_del_dia` y `dia_semana`.
+    *   Escribe estos datos enriquecidos en el archivo `/pig_input_data/waze_events.tsv` (mapeado desde el volumen del contenedor).
+*   **Salida:** Archivo `waze_events.tsv` en `entrega2/pig_processing/data_input/`.
+
+#### 3. Pig Processor (Procesamiento y Análisis)
+*   **Ubicación:** `entrega2/pig_processing/`
+*   **Tecnología:** Apache Pig 0.17.0, Pig Latin.
+*   **Función:**
+    *   Lee `waze_events.tsv`.
+    *   Realiza filtros (ej. por campos no nulos, comunas válidas).
+    *   Estandariza `original_waze_type` a `standardized_type` (ej. 'JAM' -> 'CONGESTION').
+    *   Castea `hora_del_dia_str` y `dia_semana_str` a enteros.
+    *   Realiza las siguientes agregaciones:
+        *   Conteo de eventos por `standardized_type`.
+        *   Conteo de eventos por `comuna`.
+        *   Conteo de eventos por `hora_del_dia` (ordenado).
+        *   Conteo de eventos por `dia_semana` (ordenado).
+    *   Guarda la tabla completa de eventos procesados (`all_enriched_events_table`).
+*   **Salida:** Múltiples archivos TSV en subcarpetas dentro de `entrega2/pig_processing/data_output/`.
+
+#### 4. Cache Loader (Carga de Resultados a Redis)
+*   **Ubicación:** `cache_loader/`
+*   **Tecnología:** Python, `redis`, `csv`.
+*   **Función:**
+    *   Lee los archivos TSV de resultados generados por el `pig_processor` (ej. `count_by_comuna/part-r-00000`).
+    *   Se conecta al servicio Redis (`cache`).
+    *   Almacena los datos agregados como pares clave-valor en Redis (ej. clave `stats:comuna:Lampa`, valor `12`).
+*   **Salida:** Datos cargados en la instancia de Redis.
+
+#### Servicios de Almacenamiento (MongoDB y Redis)
+*   **MongoDB (servicio `storage`):** Almacena los datos crudos recolectados por el scraper.
+*   **Redis (servicio `cache`):** Almacena los resultados agregados procesados por Pig para acceso rápido.
+
+---
+
+## Verificación de Resultados
+
+1.  **Archivo TSV del Exportador:**
+    *   Revisar `ProyectoDistribuidos/entrega2/pig_processing/data_input/waze_events.tsv`.
+    *   Debería contener los eventos de MongoDB con las columnas adicionales: `comuna`, `hora_del_dia_str`, `dia_semana_str`.
+
+2.  **Archivos de Salida de Pig:**
+    *   Navegar a `ProyectoDistribuidos/entrega2/pig_processing/data_output/`.
+    *   Dentro de las subcarpetas (`count_by_standardized_type`, `count_by_comuna`, `count_by_hour`, `count_by_day_of_week`, `all_enriched_events_table`), abrir los archivos `part-r-00000`.
+    *   Verificar que los conteos y los datos procesados sean consistentes con la entrada.
+
+3.  **Datos en Redis:**
+    *   Conectarse al contenedor de Redis:
+        ```bash
+        docker exec -it redis_cache_service redis-cli
+        ```
+    *   Ejecutar comandos para verificar los datos, por ejemplo:
+        ```redis
+        KEYS stats:*
+        GET stats:type:CONGESTION
+        GET stats:comuna:Lampa
+        GET stats:hour:21
+        GET stats:dow:4 
+        ```
+
+---
+
+## Justificación de Decisiones de Diseño
+
+*   **Procesamiento de Comuna y Timestamps en Python (Exporter):**
+    Debido a que el conector `mongo-hadoop` para Pig está End-of-Life y presenta dificultades de compatibilidad, y dada la complejidad de integrar librerías Python con dependencias C (como `shapely` para geo-procesamiento) directamente en UDFs de Pig/Jython, se tomó la decisión pragmática de realizar el enriquecimiento de datos (determinación de comuna y parseo de timestamps) en el script Python `export_mongo_to_tsv.py`. Este script actúa como un paso de preparación de datos.
+*   **Procesamiento Principal en Pig:** Una vez que los datos son ingeridos por Pig desde el archivo TSV (ya enriquecidos), **todo el filtrado subsecuente, la estandarización de tipos de eventos, y los análisis agregados requeridos se realizan íntegramente utilizando Apache Pig**, cumpliendo así con el requisito central de la entrega.
+*   **Caché con Redis:** Se utiliza Redis para almacenar los resultados agregados de Pig debido a su velocidad y simplicidad para el almacenamiento clave-valor, lo cual es ideal para proveer datos rápidamente a una futura capa de visualización.
+
+---
+
+## Evaluación de Rendimiento (Ejemplo)
+
+*(Aquí incluirías tu tabla de tiempos y una breve discusión, como lo describimos antes).*
+
+| Métrica                     | Carga: X eventos | Carga: Y eventos |
+| :-------------------------- | :--------------- | :--------------- |
+| Eventos Exportados (TSV)    | ...              | ...              |
+| Tiempo `mongo_exporter`     | ...              | ...              |
+| Tiempo `pig_processor`      | ...              | ...              |
+| Tiempo `cache_loader`       | ...              | ...              |
+
+**Discusión:**
+* *(Breve análisis de los tiempos y cómo escalan).*
+* *(Identificación de posibles cuellos de botella).*
+
+---
