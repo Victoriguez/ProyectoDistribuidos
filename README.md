@@ -113,13 +113,17 @@ Se reutiliza y configura el servicio Redis para actuar como un caché de los res
 docker-compose down --remove-orphans
 ```
 
--   Si deseas limpiar los resultados anteriores de Pig para una nueva ejecución:
+Si deseas limpiar los resultados anteriores de Pig para una nueva ejecución:
 
-    # En PowerShell (Windows)
-- Remove-Item -Recurse -Force ./entrega2/pig_processing/data_output/*
+  ### En PowerShell (Windows)
+    ```bash
+    Remove-Item -Recurse -Force ./entrega2/pig_processing/data_output/*
+    ```
 
-    # En Bash (Linux/macOS)
-- rm -rf ./entrega2/pig_processing/data_output/*
+  ### En Bash (Linux/macOS)
+    ```bash
+    rm -rf ./entrega2/pig_processing/data_output/*
+    ```
 
 ### 3. Construir y Ejecutar el Pipeline Completo
 
