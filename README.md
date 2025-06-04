@@ -1,8 +1,8 @@
 # Proyecto Sistemas Distribuidos - Entrega 2: Procesamiento y Análisis de Tráfico
 
 **Integrantes:**
-*   [Tu Nombre Completo]
-*   [Nombre Completo de tu Compañero/a]
+*   Sebastian Espinoza
+*   Victor Rodriguez
 
 ## Descripción General
 
