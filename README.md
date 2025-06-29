@@ -156,7 +156,8 @@ En la terminal donde ejecutó docker-compose up, presione Ctrl + C. O, desde cua
 
 docker-compose down
 
-Justificación de Decisiones de Diseño Clave
+## Justificación de Decisiones de Diseño Clave
+
 Exportación a TSV antes de Pig: Dada la naturaleza End-of-Life del conector mongo-hadoop y las dificultades para integrar librerías Python con dependencias C (como shapely) directamente en UDFs de Pig/Jython, se tomó la decisión pragmática de realizar el enriquecimiento de datos (determinación de comuna y parseo de timestamps) en el script Python mongo_exporter.
 
 Procesamiento Principal en Pig: Una vez que los datos son ingeridos por Pig desde el archivo TSV, todo el filtrado, estandarización y análisis agregados se realizan íntegramente utilizando Apache Pig, cumpliendo con el requisito central de la entrega.
