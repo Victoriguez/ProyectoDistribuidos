@@ -3,9 +3,9 @@ import pymongo
 import os
 import csv
 import json
-from shapely.geometry import Point, shape # Para la lógica geoespacial
-import datetime as dt_module # Usar alias para datetime
-from datetime import timezone # Para UTC
+from shapely.geometry import Point, shape
+import datetime as dt_module
+from datetime import timezone
 
 # --- Configuración ---
 MONGO_HOST = os.getenv('MONGO_HOST_EXPORTER', 'storage')
@@ -17,9 +17,12 @@ GEOJSON_FILENAME = "comunas_rm.geojson"
 GEOJSON_FILE_PATH_IN_EXPORTER_CONTAINER = os.path.join(os.getcwd(), GEOJSON_FILENAME)
 
 # --- Variables Globales para GeoJSON ---
-COMMUNAS_POLYGONS = [] 
+COMMUNAS_POLYGONS = []
+
+# --- FUNCIONES AUXILIARES (ESTO FALTABA) ---
 
 def load_comunas_geojson():
+    """Carga los polígonos de las comunas desde el archivo GeoJSON."""
     global COMMUNAS_POLYGONS
     if COMMUNAS_POLYGONS: return
 
@@ -35,17 +38,18 @@ def load_comunas_geojson():
         if geojson_data and 'features' in geojson_data:
             for feature in geojson_data['features']:
                 properties = feature.get('properties', {})
-                comuna_name = properties.get('Comuna', properties.get('NOM_COMUNA')) # Ajusta según tu GeoJSON
+                comuna_name = properties.get('Comuna', properties.get('NOM_COMUNA'))
                 geom = feature.get('geometry')
                 if comuna_name and geom:
                     COMMUNAS_POLYGONS.append((comuna_name, shape(geom)))
-            print(f"Exporter: GeoJSON cargado. {len(COMMUNAS_POLYGONS)} polígonos de comunas procesados.", flush=True)
+            print(f"Exporter: GeoJSON cargado. {len(COMMUNAS_POLYGONS)} polígonos procesados.", flush=True)
         else:
             print("Exporter: GeoJSON cargado pero vacío o sin 'features'.", flush=True)
     except Exception as e:
         print(f"Exporter: ERROR crítico cargando o procesando GeoJSON: {e}", flush=True)
 
 def determine_comuna_from_geojson(lon, lat):
+    """Determina la comuna para un punto (lon, lat) usando los polígonos cargados."""
     if not COMMUNAS_POLYGONS: return "COMUNA_NO_DISPONIBLE_EN_GEOJSON"
     try:
         point = Point(float(lon), float(lat))
@@ -58,24 +62,13 @@ def determine_comuna_from_geojson(lon, lat):
 
 def parse_timestamp(timestamp_iso_str):
     """Parsea timestamp ISO y devuelve hora y día de la semana."""
-    if not timestamp_iso_str:
-        return None, None
+    if not timestamp_iso_str: return None, None
     try:
-        # El timestamp_waze ya viene como 'YYYY-MM-DDTHH:MM:SS+00:00'
         datetime_obj = dt_module.datetime.fromisoformat(timestamp_iso_str.replace("Z", "+00:00"))
-        # Asegurar que es UTC si no tiene timezone explícita (aunque el nuestro ya lo tiene)
-        if datetime_obj.tzinfo is None or datetime_obj.tzinfo.utcoffset(datetime_obj) is None:
-            datetime_obj = datetime_obj.replace(tzinfo=timezone.utc)
-        else: # Asegurar que sea UTC
-            datetime_obj = datetime_obj.astimezone(timezone.utc)
-        
-        return datetime_obj.hour, datetime_obj.weekday() # Lunes=0, Domingo=6
-    except ValueError:
-        # print(f"Exporter: Error de ValueError parseando timestamp '{timestamp_iso_str}'")
-        return None, None
-    except Exception: # Captura general
-        # print(f"Exporter: Error general parseando timestamp '{timestamp_iso_str}'")
-        return None, None
+        if datetime_obj.tzinfo is None: datetime_obj = datetime_obj.replace(tzinfo=timezone.utc)
+        else: datetime_obj = datetime_obj.astimezone(timezone.utc)
+        return datetime_obj.hour, datetime_obj.weekday()
+    except: return None, None
 
 def connect_to_mongo():
     uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
@@ -87,52 +80,62 @@ def connect_to_mongo():
     except Exception as e:
         print(f"Exporter: Error al conectar a MongoDB: {e}", flush=True); exit(1)
 
+# --- FUNCIÓN PRINCIPAL ---
+
 def main():
-    print("Exporter: Iniciando script de exportación (con comuna y partes de tiempo)...", flush=True)
+    print("Exporter: Iniciando script de exportación y transformación completa...", flush=True)
     load_comunas_geojson() 
     collection = connect_to_mongo()
     
-    # Campos que queremos extraer y el orden en el TSV
-    # uuid_waze, type, subtype, description, location_x, location_y, timestamp_waze, comuna, hora_del_dia, dia_semana
-    
     output_dir = os.path.dirname(OUTPUT_TSV_PATH)
     if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir); print(f"Exporter: Creado directorio de salida {output_dir}", flush=True)
+        os.makedirs(output_dir)
 
-    print(f"Exporter: Exportando datos a {OUTPUT_TSV_PATH}...", flush=True)
+    print(f"Exporter: Exportando y transformando datos a {OUTPUT_TSV_PATH}...", flush=True)
     count = 0
+    type_mapping = {
+        "JAM": "CONGESTION", "ACCIDENT": "ACCIDENTE", "HAZARD": "PELIGRO_VIA",
+        "ROAD_CLOSED": "CORTE_VIAL", "POLICE": "CONTROL_POLICIAL", "CONSTRUCTION": "OBRA_VIAL"
+    }
+
     try:
         with open(OUTPUT_TSV_PATH, 'w', newline='', encoding='utf-8') as tsvfile:
-            writer = csv.writer(tsvfile, delimiter='\t', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer = csv.writer(tsvfile, delimiter='\t')
             
+            # --- LÍNEA ELIMINADA ---
+            # header = ['uuid', 'standardized_type', 'description', 'lon', 'lat', 'comuna', 'hora_del_dia', 'dia_semana', 'timestamp_original_iso']
+            # writer.writerow(header) # <--- YA NO ESCRIBIMOS CABECERA
+
             for doc in collection.find({}):
-                count += 1
+                # ... (resto de la lógica de main() como estaba, sin cambios) ...
                 loc_x = doc.get('location', {}).get('x')
                 loc_y = doc.get('location', {}).get('y')
                 timestamp_waze = doc.get('timestamp_waze', '')
-                
-                comuna_asignada = "DESCONOCIDA" # Default si no se puede determinar
-                if loc_x is not None and loc_y is not None:
-                    comuna_asignada = determine_comuna_from_geojson(loc_x, loc_y)
-                
+                original_waze_type = doc.get('type', 'UNKNOWN')
+
+                comuna_asignada = determine_comuna_from_geojson(loc_x, loc_y) if loc_x is not None and loc_y is not None else "DESCONOCIDA"
                 hora_del_dia, dia_semana = parse_timestamp(timestamp_waze)
+                standardized_type = type_mapping.get(original_waze_type, 'OTRO')
                 
+                if not doc.get('uuid_waze') or not loc_x or not loc_y or not timestamp_waze or comuna_asignada in ["COORDENADAS_INVALIDAS_PARA_COMUNA", "ERROR_EN_DET_COMUNA", "FUERA_DE_RM_CONOCIDA", "COMUNA_NO_DISPONIBLE_EN_GEOJSON", "DESCONOCIDA"]:
+                    continue
+
                 row = [
                     doc.get('uuid_waze', ''),
-                    doc.get('type', ''),
-                    doc.get('subtype', ''),
+                    standardized_type,
                     doc.get('description', ''),
-                    loc_x if loc_x is not None else '',
-                    loc_y if loc_y is not None else '',
-                    timestamp_waze,
+                    loc_x, loc_y,
                     comuna_asignada,
-                    hora_del_dia if hora_del_dia is not None else '', # Escribir vacío si es None
-                    dia_semana if dia_semana is not None else ''    # Escribir vacío si es None
+                    hora_del_dia if hora_del_dia is not None else '',
+                    dia_semana if dia_semana is not None else '',
+                    timestamp_waze
                 ]
                 writer.writerow(row)
-        print(f"Exporter: Exportación completada. {count} documentos escritos.", flush=True)
+                count += 1
+        print(f"Exporter: Exportación completada. {count} documentos válidos escritos.", flush=True)
     except Exception as e:
-        print(f"Exporter: Error durante la escritura del archivo TSV: {e}", flush=True); exit(1)
+        print(f"Exporter: Error durante la escritura del archivo TSV: {e}", flush=True)
+        exit(1)
 
 if __name__ == "__main__":
     main()

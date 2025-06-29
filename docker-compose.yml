@@ -1,6 +1,3 @@
-# Quitar 'version' si Docker Compose da warning, aunque no es un error funcional.
-# version: '3.8' 
-
 services:
   storage: 
     image: mongo:6.0
@@ -12,32 +9,13 @@ services:
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
-      timeout: 5s   # CORREGIDO
-      retries: 5    # CORREGIDO
+      timeout: 5s
+      retries: 5
     networks:
       - distribuidos_network
 
-  cache_entrega1: # Tu servicio de caché original de la Entrega 1 (Flask app)
-    build: ./cache
-    container_name: cache_entrega1_service 
-    depends_on:
-      storage:
-        condition: service_healthy
-    ports:
-      - "5001:5001" 
-    environment:
-      - CACHE_SIZE=8
-      - POLICY=LRU
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/metrics"]
-      interval: 15s
-      timeout: 10s  # CORREGIDO
-      retries: 10   # CORREGIDO
-    networks:
-      - distribuidos_network
-
-  redis_actual_cache: # Nuevo servicio Redis real
-    image: redis:alpine 
+  redis_actual_cache: 
+    image: redis:alpine
     container_name: redis_cache_for_pig_results
     ports:
       - "6380:6379" 
@@ -46,8 +24,52 @@ services:
     healthcheck: 
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s   # CORREGIDO
-      retries: 5    # CORREGIDO
+      timeout: 5s
+      retries: 5
+    networks:
+      - distribuidos_network
+
+  set-vm-max-map-count:
+    image: busybox
+    container_name: set-vm-max-map-count
+    command: ["sysctl", "-w", "vm.max_map_count=262144"]
+    privileged: true
+    restart: "no"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10
+    container_name: elasticsearch_service
+    depends_on:
+      - set-vm-max-map-count
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+    ulimits:
+      memlock: {soft: -1, hard: -1}
+      nofile: {soft: 65536, hard: 65536}
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - distribuidos_network
+    healthcheck:
+        test: ['CMD-SHELL', 'curl -s -f http://localhost:9200/_cat/health?h=status | grep -q "green\\|yellow"']
+        interval: 30s
+        timeout: 10s
+        retries: 5
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.10
+    container_name: kibana_service
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=["http://elasticsearch_service:9200"]
+    depends_on:
+      elasticsearch: {condition: service_healthy}
     networks:
       - distribuidos_network
 
@@ -55,35 +77,22 @@ services:
     build: ./scraper
     container_name: scraper 
     depends_on:
-      storage: 
-        condition: service_healthy
+      storage: {condition: service_healthy}
     environment: 
       - MONGO_HOST=storage
-      - MONGO_PORT=27017
-      - DB_NAME_SCRAPER=waze_db
-      - COLLECTION_NAME_SCRAPER=eventos
-      - SCRAPE_INTERVAL_SECONDS=3 
-      - MAX_EVENTS_TO_COLLECT=200
-    volumes:
-      - ./scraper:/app
+      - MAX_EVENTS_TO_COLLECT=150 
     networks:
       - distribuidos_network
 
   mongo_exporter:
     build: 
       context: ./mongo_exporter
-      dockerfile: Dockerfile
     container_name: mongo_exporter_service
     depends_on:
-      storage: 
-        condition: service_healthy
-      scraper: 
-        condition: service_completed_successfully
+      storage: {condition: service_healthy}
+      scraper: {condition: service_completed_successfully}
     environment:
       - MONGO_HOST_EXPORTER=storage
-      - DB_NAME_EXPORTER=waze_db
-      - COLLECTION_NAME_EXPORTER=eventos
-      - OUTPUT_TSV_PATH_EXPORTER=/exported_data/waze_events.tsv 
     volumes:
       - ./entrega2/pig_processing/data_input:/exported_data 
     networks:
@@ -102,31 +111,43 @@ services:
     networks:
       - distribuidos_network
     depends_on:
-      mongo_exporter: 
-        condition: service_completed_successfully
+      mongo_exporter: {condition: service_completed_successfully}
+    # --- AÑADIR ESTA SECCIÓN ---
+    environment:
+      - PIG_HOME=/opt/pig/pig-0.17.0
 
   cache_loader:
     build: 
       context: ./cache_loader
-      dockerfile: Dockerfile
     container_name: cache_loader_service
     depends_on:
-      pig_processor: 
-        condition: service_completed_successfully
-      redis_actual_cache: # Depende del NUEVO servicio Redis
-        condition: service_healthy
+      pig_processor: {condition: service_completed_successfully}
+      redis_actual_cache: {condition: service_healthy}
     environment:
-      - REDIS_HOST_LOADER=redis_actual_cache # Apunta al NUEVO servicio Redis
-      - REDIS_PORT_LOADER=6379     
-      - PIG_OUTPUT_BASE_DIR=/pig_results_input
+      - REDIS_HOST_LOADER=redis_actual_cache 
     volumes:
       - ./entrega2/pig_processing/data_output:/pig_results_input 
+    networks:
+      - distribuidos_network
+
+  es_loader: 
+    build: 
+      context: ./entrega3/es_loader 
+    container_name: es_loader_service
+    depends_on:
+      pig_processor: {condition: service_completed_successfully}
+      elasticsearch: {condition: service_healthy}
+    environment:
+      - ES_HOST=elasticsearch_service
+    volumes:
+      - ./entrega2/pig_processing/data_output:/pig_results 
     networks:
       - distribuidos_network
 
 volumes:
   mongo_data:
   redis_pig_data:
+  elastic_data:
 
 networks:
   distribuidos_network: 
