@@ -1,52 +1,54 @@
-# Proyecto Sistemas Distribuidos - Entrega 2 y 3: Procesamiento y Visualización de Tráfico
+# Proyecto Sistemas Distribuidos - Entrega 2: Procesamiento y Análisis de Tráfico
 
 **Integrantes:**
-*   Sebastián Espinoza
-*   Víctor Rodriguez
-
----
+*   Sebastian Espinoza
+*   Victor Rodriguez
 
 ## Descripción General
 
-Este proyecto implementa un pipeline completo para la recolección, procesamiento, análisis y visualización de datos de tráfico de la plataforma Waze en la Región Metropolitana de Santiago. El sistema está diseñado para transformar datos crudos en agregados analíticos significativos y presentarlos en un dashboard interactivo.
+Esta segunda entrega del proyecto se enfoca en el procesamiento y análisis de los datos de tráfico recolectados en la Entrega 1. El objetivo es transformar los datos crudos de Waze, almacenados en MongoDB, en información agregada y útil. Para ello, se implementa un pipeline que enriquece los datos, los procesa con Apache Pig, y finalmente carga los resultados analíticos en un caché Redis para su futura visualización.
 
-El pipeline se compone de los siguientes módulos principales, orquestados por Docker Compose:
+El pipeline de la Entrega 2 se compone de los siguientes módulos principales, orquestados por Docker Compose:
 
 1.  **Scraper**: Recolecta datos de la API GeoRSS de Waze.
 2.  **Almacenamiento (MongoDB)**: Persiste los datos crudos de Waze.
-3.  **Mongo Exporter (Python)**: Extrae datos de MongoDB, los enriquece (añadiendo comuna, hora del día, día de la semana) y los guarda como un archivo TSV.
-4.  **Pig Processor (Apache Pig)**: Lee el archivo TSV, realiza filtrado, estandarización de tipos y análisis agregados.
-5.  **Cache Loader (Python)**: Carga los resultados agregados de Pig en un caché Redis.
-6.  **Elasticsearch Loader (Python)**: Carga los resultados agregados y los datos de eventos completos en Elasticsearch.
-7.  **Servicios de Persistencia y Visualización**: Redis, Elasticsearch y Kibana.
+3.  **Mongo Exporter (Python)**: Extrae datos de MongoDB, los enriquece (añadiendo comuna, hora del día, día de la semana) usando `shapely` y los guarda como un archivo TSV.
+4.  **Pig Processor (Apache Pig)**: Lee el archivo TSV, realiza filtrado, estandarización de tipos y análisis agregados (conteo por tipo, comuna, hora y día).
+5.  **Cache Loader (Python)**: Carga los resultados de Pig en Redis.
+6.  **Sistema de Caché (Redis)**: Almacena los resultados analíticos para acceso rápido.
 
 ---
 
-## Arquitectura del Sistema
+## Arquitectura del Sistema (Entrega 2)
 
 El flujo de datos y procesamiento es el siguiente:
 
-**Waze API -> Scraper -> MongoDB (storage) -> Mongo Exporter -> `waze_events.tsv` -> Pig Processor -> Archivos TSV de Resultados -> (a) Cache Loader -> Redis & (b) ES Loader -> Elasticsearch -> Kibana (Visualización)**
+`Waze API -> Scraper (Python) -> MongoDB (storage) -> Mongo Exporter (Python + Shapely) -> waze_events.tsv -> Pig Processor (Apache Pig) -> Archivos TSV de Resultados -> Cache Loader (Python) -> Redis (redis_actual_cache)`
 
-Todos los servicios son gestionados como contenedores Docker y orquestados por Docker Compose.
+Todos los servicios son gestionados y orquestados mediante Docker y Docker Compose.
 
 ---
 
 ## Tecnologías Utilizadas
 
 *   **Lenguajes de Programación:** Python 3.10, Pig Latin (Apache Pig 0.17.0)
+*   **Frameworks/Librerías Python:** `requests`, `pymongo`, `shapely`, `redis`, `csv`, `json`, `datetime`, `os`, `io`, `sys`
+*   **Bases de Datos/Caché:** MongoDB 6.0, Redis (imagen `redis:alpine`)
 *   **Contenerización:** Docker, Docker Compose
-*   **Procesamiento de Datos:** Apache Pig 0.17.0 (sobre OpenJDK 11)
-*   **Bases de Datos y Caché:**
-    *   MongoDB 6.0
-    *   Redis (imagen `redis:alpine`)
-    *   Elasticsearch 7.17.10
-*   **Visualización:** Kibana 7.17.10
-*   **Librerías Python Clave:** `requests`, `pymongo`, `shapely`, `redis`, `elasticsearch`
+*   **Procesamiento de Datos:** Apache Pig 0.17.0 (ejecutándose sobre OpenJDK 11)
 
 ---
 
-## Estructura del Proyecto
+## Prerrequisitos
+
+*   Docker Desktop instalado y en ejecución.
+*   Docker Compose V2 (generalmente incluido con Docker Desktop).
+*   Git (para clonar el repositorio).
+*   Conexión a internet (para descargar imágenes Docker y dependencias).
+
+---
+
+## Estructura del Proyecto (Principales Componentes de la Entrega 2)
 
 ProyectoDistribuidos/
 ├── docker-compose.yml
@@ -62,107 +64,114 @@ ProyectoDistribuidos/
 ├── entrega2/
 │ └── pig_processing/
 │ ├── Dockerfile.pig
-│ ├── data_input/ # (Generado por mongo_exporter)
-│ ├── data_output/ # (Generado por pig_processor)
+│ ├── data_input/ # Aquí se guarda waze_events.tsv
+│ ├── data_output/ # Aquí Pig guarda sus resultados
 │ └── scripts/
 │ └── process_waze_data.pig
 ├── cache_loader/
 │ ├── Dockerfile
 │ ├── requirements.txt
 │ └── load_results_to_redis.py
-└── entrega3/
-└── es_loader/
-├── Dockerfile
-├── requirements.txt
-└── load_results_to_elasticsearch.py
+└── README.md
 
+## Instrucciones de Ejecución del Pipeline Completo (Entrega 2)
+
+Siga estos pasos desde la raíz del repositorio clonado (`ProyectoDistribuidos/`):
+
+1.  **Asegurar Archivo GeoJSON:**
+    Verifique que el archivo `comunas_rm.geojson` esté presente en la carpeta `mongo_exporter/`.
+
+2.  **Limpiar Ejecuciones Anteriores (Recomendado):**
+    ```bash
+    docker-compose down --remove-orphans
+    ```
+    Opcionalmente, para limpiar datos persistentes de MongoDB y Redis:
+    ```bash
+    docker volume rm proyectodistribuidos_mongo_data proyectodistribuidos_redis_pig_data
+    ```
+    *(Verifique los nombres exactos de los volúmenes con `docker volume ls` si es necesario).*
+    El script Pig (`process_waze_data.pig`) ya incluye comandos `rmf` para limpiar sus propios directorios de salida.
+
+3.  **Construir Imágenes Docker (si es la primera vez o hay cambios en Dockerfiles):**
+    ```bash
+    docker-compose build
+    ```
+
+4.  **Ejecutar el Pipeline Completo:**
+    Este comando iniciará todos los servicios. Los servicios de "job" (`scraper`, `mongo_exporter`, `pig_processor`, `cache_loader`) se ejecutarán secuencialmente. Los servicios de base de datos (`storage`, `redis_actual_cache`) permanecerán corriendo.
+    ```bash
+    docker-compose up storage redis_actual_cache scraper mongo_exporter pig_processor cache_loader
+    ```
+    *   Observe los logs en la terminal para monitorear el progreso.
+    *   `scraper`, `mongo_exporter`, `pig_processor`, y `cache_loader` deberían salir con código 0.
+    *   La terminal se quedará mostrando los logs de `storage` y `redis_actual_cache`.
+
+5.  **Verificación de Resultados:**
+
+    *   **Archivo TSV Intermedio (Salida del `mongo_exporter`):**
+        `ProyectoDistribuidos/entrega2/pig_processing/data_input/waze_events.tsv`
+
+    *   **Archivos de Salida de Pig:**
+        Navegar a `ProyectoDistribuidos/entrega2/pig_processing/data_output/`. Revisar los archivos `part-r-00000` en las subcarpetas:
+        *   `count_by_standardized_type/`
+        *   `count_by_comuna/`
+        *   `count_by_hour/`
+        *   `count_by_day_of_week/`
+        *   `all_enriched_events_table/`
+
+    *   **Datos en Redis:**
+        Abrir una **NUEVA terminal**, navegar a la raíz del proyecto y ejecutar:
+        ```bash
+        docker exec -it redis_cache_for_pig_results redis-cli
+        ```
+        Dentro de `redis-cli`, probar:
+        ```redis
+        KEYS stats:*
+        GET stats:type:CONGESTION
+        GET stats:comuna:Maipú
+        exit
+        ```
+
+6.  **Para Detener Todos los Servicios (MongoDB y Redis):**
+    En la terminal donde ejecutó `docker-compose up`, presionar `Ctrl + C`.
+    O, desde cualquier terminal en la raíz del proyecto:
+    ```bash
+    docker-compose down
+    ```
+---
+
+## Descripción Detallada de los Módulos (Entrega 2)
+
+#### 1. Scraper (Servicio: `scraper`)
+*   Recolecta datos de alertas de la API GeoRSS de Waze y los almacena en MongoDB (colección `eventos` en BD `waze_db`).
+
+#### 2. Mongo Exporter (Servicio: `mongo_exporter`)
+*   Extrae datos de MongoDB.
+*   Utiliza `shapely` y `comunas_rm.geojson` para determinar la comuna.
+*   Parsea el timestamp para extraer hora del día y día de la semana.
+*   Genera `waze_events.tsv` con datos enriquecidos.
+
+#### 3. Pig Processor (Servicio: `pig_processor`)
+*   Utiliza Apache Pig 0.17.0 para procesar `waze_events.tsv`.
+*   El script `process_waze_data.pig` realiza filtrado, estandarización de tipos, y análisis agregados (conteo por tipo, comuna, hora, día).
+*   Guarda resultados agregados y la tabla completa procesada en archivos TSV.
+
+#### 4. Cache Loader (Servicio: `cache_loader`)
+*   Lee los archivos TSV de resultados generados por Pig.
+*   Se conecta al servicio Redis (`redis_actual_cache`).
+*   Almacena los datos agregados en Redis.
+
+#### 5. Servicios de Almacenamiento
+*   **MongoDB (Servicio `storage`):** Base de datos para los datos crudos de Waze.
+*   **Redis (Servicio `redis_actual_cache`):** Caché para los resultados analíticos de Pig.
 
 ---
 
-## Instrucciones de Ejecución del Pipeline Completo
-
-Siga estos pasos desde la raíz del repositorio clonado:
-
-### 1. Prerrequisitos
-*   Asegúrese de tener **Docker Desktop** instalado y en ejecución.
-
-### 2. Limpiar Entornos Anteriores (Recomendado)
-Para asegurar una ejecución limpia, ejecute el siguiente comando en su terminal:
-```bash
-docker-compose down --remove-orphans
-```
-
-Si desea eliminar también los datos persistentes de MongoDB y Redis:
-
-docker volume rm proyectodistribuidos_mongo_data proyectodistribuidos_redis_pig_data proyectodistribuidos_elastic_data
-
-### 3. Construir y Ejecutar el Pipeline
-Este único comando construirá todas las imágenes necesarias y levantará todos los servicios en el orden correcto definido por depends_on.
-
-docker-compose up --build
-
-La opción --build es importante la primera vez o si se han modificado los Dockerfile.
-
-El proceso completo puede tardar varios minutos la primera vez, especialmente mientras se descargan las imágenes de Elasticsearch y Kibana.
-
-Los servicios scraper, mongo_exporter, pig_processor, cache_loader y es_loader son "jobs" que realizarán su tarea y saldrán con code 0 si todo es exitoso.
-
-Los servicios storage, redis_actual_cache, elasticsearch y kibana son servidores y permanecerán corriendo. Es normal que la terminal se quede mostrando los logs de estos servicios.
-
-### 4. Verificar Resultados
-Para verificar, abra una nueva terminal mientras el pipeline sigue corriendo en la primera.
-
-a.- Verificar Redis
-
-docker exec -it redis_cache_for_pig_results redis-cli
-
-Dentro de redis-cli, pruebe:
-
-KEYS stats:*
-GET stats:comuna:Santiago
-exit
-
-Debería ver una lista de claves y el conteo para la comuna solicitada.
-
-b.- Verificar Elasticsearch
-
-# Listar los índices creados
-curl "http://localhost:9200/_cat/indices?v"
-
-# Contar los documentos en el índice de eventos
-curl "http://localhost:9200/waze_eventos_procesados/_count?pretty"
-
-# Ver un ejemplo de un documento
-curl "http://localhost:9200/waze_eventos_procesados/_search?pretty"
-
-El primer comando debería mostrar sus índices (waze_eventos_procesados, stats_incidentes_por_comuna, etc.) con un conteo de documentos mayor a cero.
-
-c.- Visualizar en Kibana
-
-Abra su navegador web y vaya a http://localhost:5601.
-
-En el menú (☰), vaya a Stack Management > Index Patterns.
-
-Cree los siguientes patrones de índice:
-
-waze_eventos_procesados: Para el campo de tiempo, seleccione timestamp_original_iso.
-
-stats_*: Seleccione la opción "I don't want to use the Time Filter".
-
-Vaya a Dashboard en el menú principal para crear o ver las visualizaciones.
-
-### 5. Detener Todos los Servicios
-En la terminal donde ejecutó docker-compose up, presione Ctrl + C. O, desde cualquier terminal en la raíz del proyecto:
-
-docker-compose down
-
 ## Justificación de Decisiones de Diseño Clave
 
-Exportación a TSV antes de Pig: Dada la naturaleza End-of-Life del conector mongo-hadoop y las dificultades para integrar librerías Python con dependencias C (como shapely) directamente en UDFs de Pig/Jython, se tomó la decisión pragmática de realizar el enriquecimiento de datos (determinación de comuna y parseo de timestamps) en el script Python mongo_exporter.
-
-Procesamiento Principal en Pig: Una vez que los datos son ingeridos por Pig desde el archivo TSV, todo el filtrado, estandarización y análisis agregados se realizan íntegramente utilizando Apache Pig, cumpliendo con el requisito central de la entrega.
-
-Doble Destino para Resultados (Redis y Elasticsearch): Los resultados agregados se cargan tanto en Redis como en Elasticsearch para cumplir con los requisitos de ambas entregas: Redis para un caché rápido de clave-valor y Elasticsearch para las capacidades avanzadas de búsqueda y visualización de Kibana.
+*   **Exportación a TSV antes de Pig:** Dada la naturaleza End-of-Life del conector `mongo-hadoop` y las dificultades para integrar librerías Python con dependencias C (como `shapely`) directamente en UDFs de Pig/Jython, se optó por realizar el enriquecimiento de datos (determinación de comuna y parseo de timestamps) en el script Python `export_mongo_to_tsv.py`.
+*   **Procesamiento Principal en Pig:** Una vez que los datos son ingeridos por Pig desde el archivo TSV, todo el filtrado, estandarización y análisis agregados se realizan íntegramente utilizando Apache Pig.
+*   **Caché con Redis:** Se utiliza Redis por su rendimiento para almacenar los resultados agregados, facilitando su consumo futuro.
 
 ---
 
