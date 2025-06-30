@@ -122,7 +122,7 @@ ProyectoDistribuidos/
 
 #### Verificar datos en MongoDB
 ```bash
-docker exec -it mongodb_container mongosh waze_db --eval "db.eventos.countDocuments()"
+docker exec -it mongo-storage mongosh waze_db --eval "db.eventos.countDocuments()"
 ```
 
 #### Verificar cache en Redis
@@ -130,7 +130,7 @@ docker exec -it mongodb_container mongosh waze_db --eval "db.eventos.countDocume
 docker exec -it redis_cache_for_pig_results redis-cli
 # Dentro de redis-cli:
 KEYS stats:*
-GET stats:type:CONGESTION
+GET stats:type:CORTE_VIAL
 ```
 
 #### Verificar índices en Elasticsearch

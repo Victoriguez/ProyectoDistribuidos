@@ -80,7 +80,7 @@ services:
       storage: {condition: service_healthy}
     environment: 
       - MONGO_HOST=storage
-      - MAX_EVENTS_TO_COLLECT=150 
+      - MAX_EVENTS_TO_COLLECT=200 
     networks:
       - distribuidos_network
 

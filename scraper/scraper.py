@@ -9,12 +9,11 @@ import sys # Importar sys para salir explícitamente
 # --- Configuración ---
 MONGO_HOST = os.getenv('MONGO_HOST', 'storage')
 # La siguiente línea estaba en tu docker-compose, así que la usamos en el script.
-MAX_EVENTS_TO_COLLECT = int(os.getenv('MAX_EVENTS_TO_COLLECT', 150)) # Tomar de ENV, default 250
+MAX_EVENTS_TO_COLLECT = int(os.getenv('MAX_EVENTS_TO_COLLECT', 200)) 
 
 MONGO_URI_SCRAPER = f"mongodb://{MONGO_HOST}:27017/"
 
 def connect_to_mongo():
-    # ... (esta función ya la tienes y funciona)
     print(f"Scraper: Conectando a MongoDB en {MONGO_URI_SCRAPER}...", flush=True)
     for attempt in range(5):
         try:
