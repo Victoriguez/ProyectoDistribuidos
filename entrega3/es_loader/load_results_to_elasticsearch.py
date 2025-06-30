@@ -30,7 +30,7 @@ AGGREGATE_FILES_TO_LOAD = {
         'redis_prefix': 'stats:dow:'
     }
 }
-ALL_EVENTS_FILE_PATH = os.path.join(PIG_OUTPUT_BASE_DIR, 'all_enriched_events_table', 'part-r-00000')
+ALL_EVENTS_FILE_PATH = os.path.join(PIG_OUTPUT_BASE_DIR, 'all_enriched_events_table', 'part-m-00000')
 ALL_EVENTS_INDEX_NAME = 'waze_eventos_procesados'
 
 # --- El resto de las funciones (connect_to_es, create_index_with_mapping, etc.) y main() se mantienen igual ---
